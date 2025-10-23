@@ -8,19 +8,31 @@ import plotly.graph_objects as go
 from .gem import CalibrationResult
 
 def prob_correct_3pl(theta, a, b, c):
-    """Calculates the probability of a correct response for a given theta and 3PL parameters."""
+    """Calculates the probability of a correct response for a given theta and 3PL parameters.
+    theta is 1D N-dimensional
+    a,b,c are 1D Q-dimensional
+
+    return:
+    prob_matrix 2D-array of shape (Q, N)
+    """
     # Ensure the argument to exp is within a reasonable range to avoid overflow/underflow
     exp_arg = -a[:, None] * (theta[None, :] - b[:, None])
     exp_arg = np.clip(exp_arg, -30, 30)
     return c[:, None] + (1 - c[:, None]) / (1 + np.exp(exp_arg))
 
 def item_variance_3pl(theta, a, b, c):
-    """Calculates the variance for a single item at a given theta level."""
+    """Calculates the variance for a single item at a given theta level.
+    
+    arguments and return shapes are the same as prob_correct_3pl
+    """
     P_theta = prob_correct_3pl(theta, a, b, c)
     return P_theta * (1 - P_theta)
 
 def item_information_function_3pl(theta, a, b, c):
-    """Calculates the IIF for a given theta and 3PL parameters."""
+    """Calculates the IIF for a given theta and 3PL parameters.
+    
+    arguments and return shapes are the same as prob_correct_3pl
+    """
     P_theta = prob_correct_3pl(theta, a, b, c)
     # Ensure P_theta is not exactly 0 or 1 to avoid division by zero or log(0)
     P_theta = np.clip(P_theta, 1e-9, 1 - 1e-9)
@@ -41,14 +53,14 @@ def item_information_function_3pl(theta, a, b, c):
 # ---------------------------------------------
 def create_item_information_figure(a_params, b_params, c_params, item_labels, theta_range=None):
     """
-    Creates a Plotly figure of the Item Information Functions (IIF) for selected items.
+    Creates a Plotly figure of the Item Information Functions (IIF) for each of selected items.
 
     Args:
-        theta_range: A numpy array of theta values.
-        item_ids: A list of item IDs (strings).
-        a_params: A list or numpy array of 'a' parameters for each item.
-        b_params: A list or numpy array of 'b' parameters for each item.
-        c_params: A list or numpy array of 'c' parameters for each item.
+        a_params: A (Q,) numpy array of 'a'.
+        b_params: A (Q,) numpy array of 'b'.
+        c_params: A (Q,) numpy array of 'c'.
+        item_labels: A list of Q item labels (strings).
+        theta_range: A (N,) numpy array of theta values (Default = linspace(-10, 10, N) with N=100)
 
     Returns:
         A Plotly go.Figure object.
@@ -57,9 +69,9 @@ def create_item_information_figure(a_params, b_params, c_params, item_labels, th
         raise ValueError("Input lists/arrays for item_ids, a_params, b_params, and c_params must have the same length.")
 
     if theta_range is None:
-        theta_range = np.linspace(-10, 10, 100)
+        theta_range = np.linspace(-10, 10, 100) # shape (N,)
 
-    # Calculate IIF for the current item across the theta range
+    # Calculate IIF of shape (Q,N)
     iif_values = item_information_function_3pl(theta_range, a_params, b_params, c_params)
 
     # Create a Plotly figure
@@ -80,6 +92,11 @@ def create_item_information_figure(a_params, b_params, c_params, item_labels, th
     return fig
 
 def create_test_information_figure(a_params, b_params, c_params, item_labels, theta_range=None):
+    """
+    Creates a Plotly figure of the test Information Functions (TIF) for all selected items.
+
+    Arguments are the same as create_item_information_figure
+    """
     if not (len(item_labels) == len(a_params) == len(b_params) == len(c_params)):
         raise ValueError("Input lists/arrays for item_ids, a_params, b_params, and c_params must have the same length.")
 
@@ -88,7 +105,7 @@ def create_test_information_figure(a_params, b_params, c_params, item_labels, th
 
     # Calculate IIF for the current item across the theta range
     iif_values = item_information_function_3pl(theta_range, a_params, b_params, c_params)
-    tif_values = np.sum(iif_values, axis=0)
+    tif_values = np.sum(iif_values, axis=0) # (1, N)
 
     # Create a Plotly figure
     fig = go.Figure()
@@ -134,24 +151,14 @@ def plot_test_characteristic_curve(
     c = item_params['c_i_true']
 
     # --- Calculate P(theta) and Variance ---
+    probabilities_matrix = prob_correct_3pl(theta_range, a, b, c) # (Q,N)
+    tcc_values = np.sum(probabilities_matrix, axis=0) # (N,)
 
-    # Calculate P(theta) for all items. Resulting shape: (Q, N_theta)
-    probabilities_matrix = prob_correct_3pl(theta_range, a, b, c)
-
-    # Calculate TCC by summing probabilities across items (axis=0 for Q items).
-    # Resulting shape: (N_theta,)
-    tcc_values = np.sum(probabilities_matrix, axis=0)
-
-    # Calculate variance for each item. Resulting shape: (Q, N_theta)
-    variance_matrix = item_variance_3pl(theta_range, a, b, c)
-
-    # Calculate total variance (additive assumption). Resulting shape: (N_theta,)
-    total_variance_values = np.sum(variance_matrix, axis=0)
-
-    # Calculate standard deviation of the expected score
-    sd_expected_score_values = np.sqrt(total_variance_values)
+    variance_matrix = item_variance_3pl(theta_range, a, b, c) # (Q,N)
+    total_variance_values = np.sum(variance_matrix, axis=0) # (N,)
 
     # --- Create Uncertainty Bounds ---
+    sd_expected_score_values = np.sqrt(total_variance_values)
     upper_bound = tcc_values + 2 * sd_expected_score_values
     lower_bound = tcc_values - 2 * sd_expected_score_values
 
