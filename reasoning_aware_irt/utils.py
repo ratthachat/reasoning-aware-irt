@@ -59,11 +59,12 @@ def create_item_information_figure(a_params, b_params, c_params, item_labels, th
     if theta_range is None:
         theta_range = np.linspace(-10, 10, 100)
 
+    # Calculate IIF for the current item across the theta range
+    iif_values = item_information_function_3pl(theta_range, a_params, b_params, c_params)
+
     # Create a Plotly figure
     fig = go.Figure()
 
-    # Calculate IIF for the current item across the theta range
-    iif_values = item_information_function_3pl(theta_range, a_params, b_params, c_params)
     # Add the trace to the figure
     for i in range(len(item_labels)):
         fig.add_trace(go.Scatter(x=theta_range, y=iif_values[i], mode='lines', name=item_labels[i]))
@@ -76,6 +77,36 @@ def create_item_information_figure(a_params, b_params, c_params, item_labels, th
         hovermode='closest'
     )
 
+    return fig
+
+def create_test_information_figure(a_params, b_params, c_params, item_labels, theta_range=None):
+    if not (len(item_labels) == len(a_params) == len(b_params) == len(c_params)):
+        raise ValueError("Input lists/arrays for item_ids, a_params, b_params, and c_params must have the same length.")
+
+    if theta_range is None:
+        theta_range = np.linspace(-10, 10, 100)
+
+    # Calculate IIF for the current item across the theta range
+    iif_values = item_information_function_3pl(theta_range, a_params, b_params, c_params)
+    tif_values = np.sum(iif_values, axis=0)
+
+    # Create a Plotly figure
+    fig = go.Figure()
+
+    # Add the TIF trace
+    fig.add_trace(go.Scatter(x=theta_range, y=tif_values, mode='lines', name='Test Information Function'))
+
+    # Update layout for better visualization
+    fig.update_layout(
+        title='Test Information Function (TIF) for the Simulated Item Bank',
+        xaxis_title='Theta (Latent Ability)',
+        yaxis_title='Information',
+        hovermode='closest',
+        xaxis=dict(
+            tickmode='linear',
+            dtick=1
+        )
+    )
     return fig
 
 def plot_test_characteristic_curve(
