@@ -169,7 +169,8 @@ class ReasoningAware3PLCalibrator:
         # Summaries
         theta_j_mean, theta_j_se = self._summarize_theta(w_post_jk, theta_k)
         info = {"iters": float(t + 1), "final_loglik": float(prev_ll),
-                 "ll_trace": ll_trace, "theta_k": theta_k}
+                 "ll_trace": ll_trace, "theta_k": theta_k,
+                 "input_data" : data}
         return CalibrationResult(
             a_i=a_i, b_i=b_i, lambda_i=lambda_i, gamma_j=gamma_j,
             theta_j_mean=theta_j_mean, theta_j_se=theta_j_se,

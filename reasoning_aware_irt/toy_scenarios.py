@@ -65,7 +65,7 @@ def make_reasoning_aware_3pl_toy(
     theta_j_max = theta_j_true + (np.mean(lambda_i_true) * gamma_j_true) * X_max_j
 
     return dict(
-        Y_ij=Y_ij, B_ij=B_ij, X_ij=X_ij, c_i=c_i_true,
+        Y_ij=Y_ij, B_ij=B_ij, X_ij=X_ij, c_i_true=c_i_true,
         a_i_true=a_i_true, b_i_true=b_i_true,
         lambda_i_true=lambda_i_true, gamma_j_true=gamma_j_true,
         theta_j_true=theta_j_true, theta_j_max=theta_j_max, P_ij=P_ij,
