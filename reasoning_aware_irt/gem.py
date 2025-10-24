@@ -35,11 +35,11 @@ EPS = 1e-6 # Numeric guardrails
 @dataclass
 class CalibrationConfig:
     # Inference controls
-    gh_nodes: int = 21 # i.e. K
-    max_outer: int = 200
+    gh_nodes: int = 17 # 21 # i.e. K
+    max_outer: int = 50
     tol_ll: float = 1e-4
     seed: Optional[int] = 0
-    verbose: bool = False
+    verbose: bool = True
 
     # Regularization (ridge_* * (param − mu_*)²)
     ridge_a: float = 1e-3
@@ -54,6 +54,8 @@ class CalibrationConfig:
 
     # Bounds / behavior
     a_min: float = 0.05
+    gamma_min: float = -0.5
+    gamma_max: float = 1.25 
 
 
 @dataclass
@@ -75,7 +77,16 @@ class CalibrationResult:
     lambda_i: NDArray                # (Q,) in [0,1]
     gamma_j: NDArray                 # (N,)
     theta_j_mean: NDArray            # (N,) posterior mean of theta_j
-    theta_j_se: NDArray              # (N,) posterior std error of theta_j
+    theta_j_se: NDArray              # (N,) posterior std error of theta_j (from GH posterior)
+
+    # Bracket-style intuitive uncertainties (half-widths in latent units)
+    theta_bracket_half_tau: NDArray   # (N,) τ-bracket half-width for θ
+    theta_bracket_half_ideal: NDArray # (N,) nearest-neighbor ideal half-width for θ
+    b_bracket_half_tau: NDArray       # (Q,) τ-bracket half-width for b
+    b_bracket_half_ideal: NDArray     # (Q,) nearest-neighbor ideal half-width for b
+    gamma_bracket_half_tau: NDArray   # (N,) τ-bracket half-width for γ
+    gamma_bracket_half_ideal: NDArray # (N,) nearest-neighbor ideal half-width for γ
+
     w_post_jk: NDArray               # (N,K)
     theta_k: NDArray                 # (K,)
     info: Dict[str, float | list[float]]
@@ -171,9 +182,27 @@ class ReasoningAware3PLCalibrator:
         info = {"iters": float(t + 1), "final_loglik": float(prev_ll),
                  "ll_trace": ll_trace, "theta_k": theta_k,
                  "input_data" : data}
+        # Compute intuitive bracket uncertainties (τ=0.75 default)
+        tau = 0.75
+        theta_br_tau, theta_br_ideal = self._compute_theta_brackets(
+            a_i=a_i, b_i=b_i, lambda_i=lambda_i, gamma_j=gamma_j, c_i=c_i,
+            X_ij=X_ij, w_post_jk=w_post_jk, theta_k=theta_k, theta_j_mean=theta_j_mean, tau=tau,
+        )
+        b_br_tau, b_br_ideal = self._compute_b_brackets(
+            a_i=a_i, b_i=b_i, lambda_i=lambda_i, gamma_j=gamma_j, c_i=c_i,
+            X_ij=X_ij, w_post_jk=w_post_jk, theta_k=theta_k, theta_j_mean=theta_j_mean, tau=tau,
+        )
+        gamma_br_tau, gamma_br_ideal = self._compute_gamma_brackets(
+            a_i=a_i, b_i=b_i, lambda_i=lambda_i, gamma_j=gamma_j, c_i=c_i,
+            X_ij=X_ij, w_post_jk=w_post_jk, theta_k=theta_k, theta_j_mean=theta_j_mean, tau=tau,
+        )
+
         return CalibrationResult(
             a_i=a_i, b_i=b_i, lambda_i=lambda_i, gamma_j=gamma_j,
             theta_j_mean=theta_j_mean, theta_j_se=theta_j_se,
+            theta_bracket_half_tau=theta_br_tau, theta_bracket_half_ideal=theta_br_ideal,
+            b_bracket_half_tau=b_br_tau, b_bracket_half_ideal=b_br_ideal,
+            gamma_bracket_half_tau=gamma_br_tau, gamma_bracket_half_ideal=gamma_br_ideal,
             w_post_jk=w_post_jk, theta_k=theta_k, info=info,
         )
 
@@ -293,7 +322,7 @@ class ReasoningAware3PLCalibrator:
 
             x0 = np.array([a_i[i], b_i[i]], dtype=float)
             bounds = [(self.cfg.a_min, None), (None, None)]
-            res = minimize(obj_grad, x0, method="L-BFGS-B", jac=True, bounds=bounds)
+            res = minimize(obj_grad, x0, method="L-BFGS-B", jac=True, bounds=bounds, options={"maxiter": 40, "ftol": 1e-6})
             a_i[i], b_i[i] = res.x
 
         return a_i, b_i
@@ -343,7 +372,8 @@ class ReasoningAware3PLCalibrator:
 
             x0 = np.array([lambda_i[i]], dtype=float)
             bounds = [(0.0, 1.0)]
-            res = minimize(obj_grad_lambda, x0, method="L-BFGS-B", jac=True, bounds=bounds)
+            res = minimize(obj_grad_lambda, x0, method="L-BFGS-B", jac=True, bounds=bounds,
+                           options={"maxiter": 40, "ftol": 1e-6})
             lambda_i[i] = float(np.clip(res.x[0], 0.0, 1.0))
 
         return lambda_i
@@ -393,7 +423,7 @@ class ReasoningAware3PLCalibrator:
                 return float(obj), np.array([grad], dtype=float)
 
             x0 = np.array([gamma_j[j]], dtype=float)
-            res = minimize(obj_grad_gamma, x0, method="L-BFGS-B", jac=True)
+            res = minimize(obj_grad_gamma, x0, method="L-BFGS-B", jac=True, options={"maxiter": 40, "ftol": 1e-6})
             gamma_j[j] = float(res.x[0])
 
         return gamma_j
@@ -422,7 +452,10 @@ class ReasoningAware3PLCalibrator:
         a_i = a_i * sigma_theta
         b_i = (b_i - mu_theta) / sigma_theta
         gamma_j = gamma_j / sigma_theta
-        lambda_i = np.clip(lambda_i, 0.0, 1.0)  # safety
+
+        # post-hoc bound for gamma_j, lambda_i
+        gamma_j = np.clip(gamma_j, self.cfg.gamma_min, self.cfg.gamma_max)
+        lambda_i = np.clip(lambda_i, 0.0, 1.0)
         return a_i, b_i, lambda_i, gamma_j
 
     # ---------- Utilities ----------
@@ -514,4 +547,293 @@ class ReasoningAware3PLCalibrator:
         m2_j = w_post_jk @ (theta_k ** 2)                       # (N,)
         theta_j_se = np.sqrt(np.maximum(m2_j - theta_j_mean ** 2, 0.0))  # (N,)
         return theta_j_mean, theta_j_se
+
+    # ---------- Bracket-style uncertainties ----------
+    def _compute_theta_brackets(
+        self,
+        *,
+        a_i: NDArray, b_i: NDArray, lambda_i: NDArray, gamma_j: NDArray, c_i: NDArray,
+        X_ij: NDArray, w_post_jk: NDArray, theta_k: NDArray, theta_j_mean: NDArray,
+        tau: float = 0.75,
+    ) -> Tuple[NDArray, NDArray]:
+        """Per-respondent θ brackets (τ-bracket and ideal). Returns two (N,) arrays of half-widths.
+        If one side of the bracket is missing, returns NaN for that respondent.
+        """
+        Q, N = X_ij.shape
+        K = theta_k.shape[0]
+        # Base term for all items/nodes (independent of j)
+        base_ik = a_i[:, None] * (theta_k[None, :] - b_i[:, None])  # (Q,K)
+
+        theta_half_tau = np.full(N, np.nan, dtype=float)
+        theta_half_ideal = np.full(N, np.nan, dtype=float)
+
+        for j in range(N):
+            theta_hat = float(theta_j_mean[j])
+            # Effective difficulties for respondent j
+            d_i = b_i - (lambda_i * gamma_j[j] * X_ij[:, j])        # (Q,)
+            # Posterior-predictive success per item for respondent j
+            budget_i = a_i * lambda_i * gamma_j[j] * X_ij[:, j]     # (Q,)
+            eta_ik = base_ik + budget_i[:, None]                    # (Q,K)
+            s_ik = expit(eta_ik)
+            p_ik = c_i[:, None] + (1.0 - c_i)[:, None] * s_ik
+            p_ik = np.clip(p_ik, EPS, 1.0 - EPS)
+            p_avg_i = p_ik @ w_post_jk[j, :]                        # (Q,)
+
+            # Ideal nearest neighbors (ignoring probabilities)
+            left_mask = d_i <= theta_hat
+            right_mask = d_i >= theta_hat
+            if np.any(left_mask) and np.any(right_mask):
+                L_val = np.max(d_i[left_mask])
+                R_val = np.min(d_i[right_mask])
+                theta_half_ideal[j] = 0.5 * (R_val - L_val)
+
+            # τ-bracket: left needs high success prob (≥ τ), right needs low (≤ 1-τ)
+            left_tau_mask = left_mask & (p_avg_i >= tau)
+            right_tau_mask = right_mask & (p_avg_i <= 1.0 - tau)
+            if np.any(left_tau_mask) and np.any(right_tau_mask):
+                L_tau = np.max(d_i[left_tau_mask])
+                R_tau = np.min(d_i[right_tau_mask])
+                theta_half_tau[j] = 0.5 * (R_tau - L_tau)
+
+        return theta_half_tau, theta_half_ideal
+
+    def _compute_b_brackets(
+        self,
+        *,
+        a_i: NDArray, b_i: NDArray, lambda_i: NDArray, gamma_j: NDArray, c_i: NDArray,
+        X_ij: NDArray, w_post_jk: NDArray, theta_k: NDArray, theta_j_mean: NDArray,
+        tau: float = 0.75,
+    ) -> Tuple[NDArray, NDArray]:
+        """Per-item b brackets (τ-bracket and ideal). Returns two (Q,) arrays of half-widths.
+        If one side of the bracket is missing, returns NaN for that item.
+        """
+        Q, N = X_ij.shape
+        b_half_tau = np.full(Q, np.nan, dtype=float)
+        b_half_ideal = np.full(Q, np.nan, dtype=float)
+
+        for i in range(Q):
+            b_hat = float(b_i[i])
+            # Adjusted abilities for this item across respondents
+            tilde_theta_j = theta_j_mean + (lambda_i[i] * gamma_j * X_ij[i, :])  # (N,)
+
+            # Posterior-predictive success for this item across respondents
+            a = float(a_i[i]); b = float(b_i[i]); c = float(c_i[i])
+            base_k = a * (theta_k - b)                                  # (K,)
+            budget_j = a * (lambda_i[i] * gamma_j * X_ij[i, :])         # (N,)
+            eta_jk = base_k[None, :] + budget_j[:, None]                # (N,K)
+            s_jk = expit(eta_jk)
+            p_jk = c + (1.0 - c) * s_jk
+            p_jk = np.clip(p_jk, EPS, 1.0 - EPS)
+            p_avg_j = np.sum(w_post_jk * p_jk, axis=1)                  # (N,)
+
+            # Ideal nearest neighbors in tilde_theta
+            left_mask = tilde_theta_j <= b_hat
+            right_mask = tilde_theta_j >= b_hat
+            if np.any(left_mask) and np.any(right_mask):
+                L_val = np.max(tilde_theta_j[left_mask])
+                R_val = np.min(tilde_theta_j[right_mask])
+                b_half_ideal[i] = 0.5 * (R_val - L_val)
+
+            # τ-bracket: left wants failure (≤ 1-τ), right wants success (≥ τ)
+            left_tau_mask = left_mask & (p_avg_j <= 1.0 - tau)
+            right_tau_mask = right_mask & (p_avg_j >= tau)
+            if np.any(left_tau_mask) and np.any(right_tau_mask):
+                L_tau = np.max(tilde_theta_j[left_tau_mask])
+                R_tau = np.min(tilde_theta_j[right_tau_mask])
+                b_half_tau[i] = 0.5 * (R_tau - L_tau)
+
+        return b_half_tau, b_half_ideal
+
+    def _compute_gamma_brackets(
+        self,
+        *,
+        a_i: NDArray, b_i: NDArray, lambda_i: NDArray, gamma_j: NDArray, c_i: NDArray,
+        X_ij: NDArray, w_post_jk: NDArray, theta_k: NDArray, theta_j_mean: NDArray,
+        tau: float = 0.75,
+    ) -> Tuple[NDArray, NDArray]:
+        """Per-respondent γ brackets (τ-bracket and ideal). Returns two (N,) arrays of half-widths.
+        Items with λ_i X_ij == 0 contribute no γ information and are ignored. NaN if one side missing.
+        """
+        Q, N = X_ij.shape
+        K = theta_k.shape[0]
+        # Precompute item/node base once
+        base_ik = a_i[:, None] * (theta_k[None, :] - b_i[:, None])  # (Q,K)
+
+        gamma_half_tau = np.full(N, np.nan, dtype=float)
+        gamma_half_ideal = np.full(N, np.nan, dtype=float)
+
+        for j in range(N):
+            theta_hat = float(theta_j_mean[j])
+            denom_i = lambda_i * X_ij[:, j]                            # (Q,)
+            valid = denom_i > 0.0
+            if not np.any(valid):
+                continue
+            gamma_star_i = (b_i[valid] - theta_hat) / denom_i[valid]   # (Q_valid,)
+
+            # Posterior-predictive success per valid item at current γ_j
+            budget_i = a_i[valid] * lambda_i[valid] * gamma_j[j] * X_ij[valid, j]  # (Q_valid,)
+            eta_ik = base_ik[valid, :] + budget_i[:, None]                          # (Q_valid,K)
+            s_ik = expit(eta_ik)
+            p_ik = c_i[valid, None] + (1.0 - c_i[valid, None]) * s_ik
+            p_ik = np.clip(p_ik, EPS, 1.0 - EPS)
+            p_avg_i = p_ik @ w_post_jk[j, :]                                        # (Q_valid,)
+
+            ghat = float(gamma_j[j])
+            left_mask = gamma_star_i <= ghat
+            right_mask = gamma_star_i >= ghat
+            if np.any(left_mask) and np.any(right_mask):
+                L_val = np.max(gamma_star_i[left_mask])
+                R_val = np.min(gamma_star_i[right_mask])
+                gamma_half_ideal[j] = 0.5 * (R_val - L_val)
+
+            left_tau_mask = left_mask & (p_avg_i >= tau)
+            right_tau_mask = right_mask & (p_avg_i <= 1.0 - tau)
+            if np.any(left_tau_mask) and np.any(right_tau_mask):
+                L_tau = np.max(gamma_star_i[left_tau_mask])
+                R_tau = np.min(gamma_star_i[right_tau_mask])
+                gamma_half_tau[j] = 0.5 * (R_tau - L_tau)
+
+        return gamma_half_tau, gamma_half_ideal
+
+# ---------- Post-hoc External Utilities ----------0
+def compute_laplace_ses(
+    result,                      # CalibrationResult from fit(...)
+    data,                        # CalibrationData used in fit(...)
+    *,
+    blocks: Iterable[str] = ("a","b","lambda","gamma"),
+    ridges: Dict[str, float] | None = None,   # {'ridge_a':..., 'ridge_b':..., 'ridge_lambda':..., 'ridge_gamma':...}
+) -> Dict[str, np.ndarray]:
+    """
+    Post-hoc Laplace (Fisher) standard errors under the fitted model.
+    Returns arrays keyed by '<param>_laplace_se'. Uses the final E-step posteriors w_post_jk.
+
+    Notes:
+      - Works entirely post-fit (no GEM changes).
+      - If you used nonzero ridges in the fit, pass the same values via `ridges=...`
+        (we default to 0.0 if not provided).
+      - Near boundaries (e.g., a_i≈a_min, lambda_i≈0/1) SEs reflect the penalty and can be prior-dominated.
+    
+    Usage Example:
+    # After you run fit(...)
+    res = est.fit(data)
+
+    # If you used nonzero ridges in fit, pass them here for honest SEs:
+    ses = compute_laplace_ses(
+        res, data,
+        blocks=("a","b","lambda","gamma"),           # or any subset
+        ridges={"ridge_a":1e-3,"ridge_b":1e-3,"ridge_lambda":1e-5,"ridge_gamma":1e-5},
+    )
+
+    # Output : ses["gamma_laplace_se"]  -> (N,)  SEs for gamma_j
+    #          ses["b_laplace_se"]      -> (Q,)
+    #          ses["a_laplace_se"]      -> (Q,)
+    """
+    # Extract
+    a_i       = np.asarray(result.a_i,       dtype=float)   # (Q,)
+    b_i       = np.asarray(result.b_i,       dtype=float)   # (Q,)
+    lam_i     = np.asarray(result.lambda_i,  dtype=float)   # (Q,)
+    gam_j     = np.asarray(result.gamma_j,   dtype=float)   # (N,)
+    theta_k   = np.asarray(result.theta_k,   dtype=float)   # (K,)
+    w_post_jk = np.asarray(result.w_post_jk, dtype=float)   # (N,K)
+
+    Y_ij = np.asarray(data.Y_ij, dtype=float)               # (Q,N) not used directly here
+    B_ij = np.asarray(data.B_ij, dtype=float)               # (Q,N)
+    c_i  = np.asarray(data.c_i,  dtype=float)               # (Q,)
+
+    Q, N = Y_ij.shape
+    K = theta_k.shape[0]
+    X_ij = np.log1p(B_ij)                                   # absolute budgets, as in fit
+
+    # Ridges (if not provided, try to fetch from result.info; else fall back to 0.)
+    def _ridge(name, default=0.0):
+        if ridges is not None and name in ridges: return float(ridges[name])
+        if getattr(result, "info", None) and name in result.info: return float(result.info[name])
+        return float(default)
+
+    ridge_a       = _ridge("ridge_a", 0.0)
+    ridge_b       = _ridge("ridge_b", 0.0)
+    ridge_lambda  = _ridge("ridge_lambda", 0.0)
+    ridge_gamma   = _ridge("ridge_gamma", 0.0)
+
+    # ----- Build eta_{i j k}, p_{i j k}, and Fisher weight W^F_{i j k} -----
+    # Shapes:
+    # base_ik:   (Q,K)  = a_i[:,None] * (theta_k[None,:] - b_i[:,None])
+    # budget_ij: (Q,N)  = (a_i * lam_i)[:,None] * gam_j[None,:] * X_ij
+    base_ik   = a_i[:, None] * (theta_k[None, :] - b_i[:, None])              # (Q,K)
+    budget_ij = (a_i * lam_i)[:, None] * gam_j[None, :] * X_ij                # (Q,N)
+    eta_ijk   = base_ik[:, None, :] + budget_ij[:, :, None]                   # (Q,N,K)
+
+    s_ijk = expit(eta_ijk)                                                    # (Q,N,K)
+    p_ijk = c_i[:, None, None] + (1.0 - c_i)[:, None, None] * s_ijk           # (Q,N,K)
+    p_ijk = np.clip(p_ijk, EPS, 1.0 - EPS)
+
+    g_ijk  = (1.0 - c_i)[:, None, None] * s_ijk * (1.0 - s_ijk)               # (Q,N,K)
+    Wf_ijk = (g_ijk * g_ijk) / (p_ijk * (1.0 - p_ijk) + EPS)                  # (Q,N,K)
+
+    # Posterior weights (broadcast to (Q,N,K))
+    w_ijk = w_post_jk[None, :, :]                                             # (1,N,K)
+
+    out: Dict[str, np.ndarray] = {}
+
+    # ----- b_i (1-D): H_bb = sum_{j,k} w Wf * a_i^2 + 2*ridge_b -----
+    if "b" in blocks:
+        Hbb = (a_i * a_i) * np.sum(Wf_ijk * w_ijk, axis=(1, 2)) + 2.0 * ridge_b   # (Q,)
+        b_se = 1.0 / np.sqrt(np.maximum(Hbb, EPS))
+        out["b_laplace_se"] = b_se
+
+    # ----- lambda_i (1-D): dη/dλ = a_i * γ_j * X_ij -----
+    if "lambda" in blocks:
+        dlam_ij = (a_i[:, None] * gam_j[None, :] * X_ij)                          # (Q,N)
+        Hll = np.sum((Wf_ijk * w_ijk) * (dlam_ij[:, :, None] ** 2), axis=(1, 2)) + 2.0 * ridge_lambda
+        lam_se = 1.0 / np.sqrt(np.maximum(Hll, EPS))
+        out["lambda_laplace_se"] = lam_se
+
+    # ----- gamma_j (1-D): dη/dγ = a_i * λ_i * X_ij -----
+    if "gamma" in blocks:
+        dgam_ij = (a_i * lam_i)[:, None] * X_ij                                   # (Q,N)
+        # sum over items i and nodes k for each j
+        Wsum_ij = np.sum(Wf_ijk * w_ijk, axis=2)                                  # (Q,N)
+        Hgg = np.sum(Wsum_ij * (dgam_ij ** 2), axis=0) + 2.0 * ridge_gamma        # (N,)
+        gam_se = 1.0 / np.sqrt(np.maximum(Hgg, EPS))
+        out["gamma_laplace_se"] = gam_se
+
+    # ----- (a_i, b_i) joint 2x2 per item -----
+    if "a" in blocks or "ab" in blocks:
+        # dη/da = (θ_k - b_i) + λ_i γ_j X_ij
+        term1_ik = (theta_k[None, :] - b_i[:, None])                               # (Q,K)
+        term2_ij = (lam_i[:, None] * gam_j[None, :] * X_ij)                        # (Q,N)
+        dda_ijk  = term1_ik[:, None, :] + term2_ij[:, :, None]                     # (Q,N,K)
+        # dη/db = -a_i
+        ddb_i    = -a_i                                                            # (Q,)
+
+        # Fisher blocks
+        Waa = np.sum((Wf_ijk * w_ijk) * (dda_ijk ** 2), axis=(1, 2)) + 2.0 * ridge_a     # (Q,)
+        Wbb = (a_i * a_i) * np.sum(Wf_ijk * w_ijk, axis=(1, 2)) + 2.0 * ridge_b          # (Q,)
+        Wab = np.sum((Wf_ijk * w_ijk) * (dda_ijk * ddb_i[:, None, None]), axis=(1, 2))   # (Q,)
+
+        # Invert 2x2 Fisher per item safely
+        det = Waa * Wbb - Wab * Wab
+        # jitter where needed
+        bad = det <= EPS
+        if np.any(bad):
+            jitter = 1e-8
+            Waa = Waa + bad * jitter
+            Wbb = Wbb + bad * jitter
+            det = Waa * Wbb - Wab * Wab
+
+        inv_aa =  Wbb / det
+        inv_bb =  Waa / det
+        inv_ab = -Wab / det
+
+        a_se = np.sqrt(np.maximum(inv_aa, 0.0))
+        b_se2 = np.maximum(inv_bb, 0.0)    # if you want a second estimate via joint block
+        ab_corr = inv_ab / (a_se * np.sqrt(np.maximum(inv_bb, 0.0)) + EPS)
+
+        if "a" in blocks:  out["a_laplace_se"] = a_se
+        if "ab" in blocks: out["ab_laplace_corr"] = ab_corr
+        # If you want to expose the joint-based b SE instead of (or in addition to) the 1D one:
+        # out["b_laplace_se_from_ab"] = np.sqrt(b_se2)
+
+    return out
+
 

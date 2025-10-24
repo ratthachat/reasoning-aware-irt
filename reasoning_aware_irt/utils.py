@@ -255,6 +255,9 @@ def plot_multiple_b_theta_histograms(generative_data_list: Sequence[dict | Calib
                                      plots_per_row: int = 4, 
                                      avg_Y_list: Sequence[float] | None = None):
     """Quick grid using plot_b_theta_histograms, with optional mean(Y) subtitles.
+    generative_data is either an output from the paper's GEM (CalibrationResult type)
+    or any data of dict type containing keys 'theta_j_true', 'b_i_true' and 'theta_j_max'
+    (see .toy_scenarios.make_reasoning_aware_3pl_toy )
     """
     m = len(generative_data_list)
     cols = min(plots_per_row, m)
