@@ -36,7 +36,7 @@ EPS = 1e-6 # Numeric guardrails
 class CalibrationConfig:
     # Inference controls
     gh_nodes: int = 17 # 21 # i.e. K
-    max_outer: int = 50
+    max_iter: int = 50
     tol_ll: float = 1e-4
     seed: Optional[int] = 0
     verbose: bool = True
@@ -44,8 +44,8 @@ class CalibrationConfig:
     # Regularization (ridge_* * (param − mu_*)²)
     ridge_a: float = 1e-3
     ridge_b: float = 1e-3
-    ridge_lambda: float = 1e-5
-    ridge_gamma: float = 1e-5
+    ridge_lambda: float = 0.1
+    ridge_gamma: float = 0.1
     # Prior centers (mu_*) for {a_i, b_i, lambda_i, gamma_j}
     mu_a: float = 1.0
     mu_b: float = 0.0
@@ -54,8 +54,11 @@ class CalibrationConfig:
 
     # Bounds / behavior
     a_min: float = 0.05
+    a_max: float = 5.00
     gamma_min: float = -0.5
     gamma_max: float = 1.25 
+    lambda_min: float = 0.01
+    lambda_max: float = 0.999
 
 
 @dataclass
@@ -98,7 +101,7 @@ class CalibrationResult:
 class ReasoningAware3PLCalibrator:
     """Estimator for the reasoning‑aware 3PL model with absolute budgets.
 
-    GEM outer loop (per iteration):
+    GEM main loop (per iteration):
       1) E‑step: posterior weights w_post_jk over GH nodes theta_k for each respondent.
       2) M‑items: update (a_i, b_i) independently for each item i.
       3) M‑item‑gate: update lambda_i in [0,1] (bounded SciPy minimize) per item i.
@@ -131,7 +134,7 @@ class ReasoningAware3PLCalibrator:
         ll_trace: list[float] = []
         prev_ll = -np.inf
 
-        for t in range(self.cfg.max_outer):
+        for t in range(self.cfg.max_iter):
             # 1) E‑step
             w_post_jk, ll_obs = self._estep(
                 Y_ij=Y_ij, X_ij=X_ij,
@@ -321,7 +324,7 @@ class ReasoningAware3PLCalibrator:
                 return float(obj), np.array([grad_a, grad_b], dtype=float)
 
             x0 = np.array([a_i[i], b_i[i]], dtype=float)
-            bounds = [(self.cfg.a_min, None), (None, None)]
+            bounds = [(self.cfg.a_min, self.cfg.a_max), (None, None)]
             res = minimize(obj_grad, x0, method="L-BFGS-B", jac=True, bounds=bounds, options={"maxiter": 40, "ftol": 1e-6})
             a_i[i], b_i[i] = res.x
 
@@ -453,9 +456,10 @@ class ReasoningAware3PLCalibrator:
         b_i = (b_i - mu_theta) / sigma_theta
         gamma_j = gamma_j / sigma_theta
 
-        # post-hoc bound for gamma_j, lambda_i
+        # post-hoc bound for gamma_j, lambda_i and a_i
         gamma_j = np.clip(gamma_j, self.cfg.gamma_min, self.cfg.gamma_max)
-        lambda_i = np.clip(lambda_i, 0.0, 1.0)
+        lambda_i = np.clip(lambda_i, self.cfg.lambda_min, self.cfg.lambda_max)
+        a_i = np.clip(a_i, self.cfg.a_min, self.cfg.a_max)
         return a_i, b_i, lambda_i, gamma_j
 
     # ---------- Utilities ----------
@@ -700,7 +704,7 @@ def compute_laplace_ses(
     result,                      # CalibrationResult from fit(...)
     data,                        # CalibrationData used in fit(...)
     *,
-    blocks: Iterable[str] = ("a","b","lambda","gamma"),
+    blocks = ("a","b","lambda","gamma"),
     ridges: Dict[str, float] | None = None,   # {'ridge_a':..., 'ridge_b':..., 'ridge_lambda':..., 'ridge_gamma':...}
 ) -> Dict[str, np.ndarray]:
     """
