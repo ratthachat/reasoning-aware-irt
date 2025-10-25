@@ -3,6 +3,7 @@ from numpy import ndarray
 from typing import *
 
 import matplotlib.pyplot as plt
+from matplotlib.axes import Axes
 import plotly.graph_objects as go
 
 from .gem import CalibrationResult
@@ -276,3 +277,69 @@ def plot_multiple_b_theta_histograms(generative_data_list: Sequence[dict | Calib
         axes[r, c].axis('off')
     fig.tight_layout()
     return fig, axes
+
+def plot_parameter_scatter_with_se(
+    ax: Axes,
+    true_values: Union[np.ndarray, List[float]],
+    estimated_values: Union[np.ndarray, List[float]],
+    estimated_se: Union[np.ndarray, List[float], None] = None,
+    param_label: str = "",
+    min_lim: float | None = None,
+    max_lim: float | None = None,
+):
+    """
+    Generates a scatter plot of estimated vs true parameter values,
+    including standard error (SE) bars on the estimated values (Y-axis).
+    """
+    # 1. Plot the Central Estimates (Scatter Plot)
+    # We use ax.scatter instead of sns.scatterplot here because we'll add
+    # error bars in a separate layer, often simplifying the control.
+    ax.scatter(x=true_values, y=estimated_values, label='Estimate', color='blue', alpha=0.6, s=20)
+
+    # 2. Add Error Bars based on estimated_se
+    # The 'yerr' argument takes the standard error (or range) for the vertical axis (estimated values).
+    # We plot the error bars without re-plotting the central point (fmt='none').
+    if estimated_se is None:
+        estimated_se = np.zeros_like(estimated_values)
+
+    ax.errorbar(
+        x=true_values,
+        y=estimated_values,
+        yerr=estimated_se, # Estimated SE provides the error distance
+        fmt='none',       # Do not plot the data points again
+        ecolor='gray',    # Error bar color
+        elinewidth=0.8,   # Error bar line thickness
+        capsize=3,        # Size of the caps on the error bars
+        alpha=0.5,        # Transparency
+        zorder=0          # Ensure error bars are plotted underneath the central points
+    )
+
+    # 3. Set Labels, Title, and 1:1 Line (Unchanged)
+    ax.set_title(f'Estimated {param_label} vs. True')
+    ax.set_xlabel(f'True {param_label}')
+    ax.set_ylabel(f'Estimated {param_label} (with SE)')
+
+    # Calculate global min/max for the 1:1 line and axis limits
+    # We should consider the full range of the error bars for robust axis limits
+    min_data = min(true_values.min(), (estimated_values - estimated_se).min())
+    max_data = max(true_values.max(), (estimated_values + estimated_se).max())
+
+    # Add a small buffer for visualization
+    buffer = (max_data - min_data) * 0.05
+    min_val = min_data - buffer
+    max_val = max_data + buffer
+
+    # Plot the 1:1 reference line
+    ax.plot([min_val, max_val], [min_val, max_val], color='red', linestyle='--', label='1:1 Line')
+
+    # Set axis limits based on buffered min/max except specified by a user
+    if min_lim is None:
+        min_lim = min_val
+    if max_lim is None:
+        max_lim = max_val
+
+    ax.set_xlim(min_lim, max_lim)
+    ax.set_ylim(min_lim, max_lim)
+
+    ax.grid(True, which='both', linestyle='--', linewidth=0.5)
+    ax.legend()
