@@ -454,8 +454,8 @@ class ReasoningAware3PLCalibrator:
         # Co-transform
         a_i = a_i * sigma_theta
         b_i = (b_i - mu_theta) / sigma_theta
-        # gamma_j = gamma_j / sigma_theta
-        lambda_i = lambda_i / sigma_theta
+        gamma_j = gamma_j / sigma_theta
+        
         print(f"mu_theta = {mu_theta: .3}, sigma_theta = {sigma_theta: .5}")
 
         # post-hoc bound for gamma_j, lambda_i and a_i
