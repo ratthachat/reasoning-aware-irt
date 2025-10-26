@@ -49,6 +49,17 @@ def item_information_function_3pl(theta, a, b, c):
     iif = (a[:, None]**2) * (numerator / denominator[:, None]) * ((1 - P_theta) / P_theta)
     return iif
 
+def location_scale_transform(x, mu=None, sigma=None):
+    if mu is None: # assuming both mu & sigma are none for consistency here
+        mu = x.mean()
+        mu_sq = (x**2).mean()
+
+        variance = mu_sq - mu**2
+        sigma = np.sqrt(max(variance, 1e-12))
+    
+    x_new = (x-mu)/sigma
+    return x_new, mu, sigma
+
 # =============================================
 # utils for CalibrationResult | toy_data visualization
 # ---------------------------------------------
