@@ -297,6 +297,9 @@ def plot_parameter_scatter_with_se(
     param_label: str = "",
     min_lim: float | None = None,
     max_lim: float | None = None,
+    x_label: str | None = None, 
+    y_label: str | None = None,
+    title: str | None = None,
 ):
     """
     Generates a scatter plot of estimated vs true parameter values,
@@ -305,7 +308,7 @@ def plot_parameter_scatter_with_se(
     # 1. Plot the Central Estimates (Scatter Plot)
     # We use ax.scatter instead of sns.scatterplot here because we'll add
     # error bars in a separate layer, often simplifying the control.
-    ax.scatter(x=true_values, y=estimated_values, label='Estimate', color='blue', alpha=0.6, s=20)
+    ax.scatter(x=true_values, y=estimated_values, color='blue', alpha=0.6, s=20) # , label=None
 
     # 2. Add Error Bars based on estimated_se
     # The 'yerr' argument takes the standard error (or range) for the vertical axis (estimated values).
@@ -326,9 +329,13 @@ def plot_parameter_scatter_with_se(
     )
 
     # 3. Set Labels, Title, and 1:1 Line (Unchanged)
-    ax.set_title(f'Estimated {param_label} vs. True')
-    ax.set_xlabel(f'True {param_label}')
-    ax.set_ylabel(f'Estimated {param_label} (with SE)')
+    if x_label is None or y_label is None or title is None: # default true vs. estimated
+        x_label = f'True {param_label}'
+        y_label = f'Estimated {param_label}'
+        title = f'Estimated {param_label} vs. True'
+    ax.set_title(title)
+    ax.set_xlabel(x_label)
+    ax.set_ylabel(y_label)
 
     # Calculate global min/max for the 1:1 line and axis limits
     # We should consider the full range of the error bars for robust axis limits
@@ -341,7 +348,9 @@ def plot_parameter_scatter_with_se(
     max_val = max_data + buffer
 
     # Plot the 1:1 reference line
-    ax.plot([min_val, max_val], [min_val, max_val], color='red', linestyle='--', label='1:1 Line')
+    ax.plot([min_val, max_val], [min_val, max_val], color='red', linestyle='--', 
+            # label='1:1 Line'
+            )
 
     # Set axis limits based on buffered min/max except specified by a user
     if min_lim is None:
