@@ -7,6 +7,7 @@ from matplotlib.axes import Axes
 import plotly.graph_objects as go
 
 from .gem import CalibrationResult
+from .classic_irt_em import ClassicCalibrationResult
 
 def prob_correct_3pl(theta, a, b, c):
     """Calculates the probability of a correct response for a given theta and 3PL parameters.
@@ -61,8 +62,80 @@ def location_scale_transform(x, mu=None, sigma=None):
     return x_new, mu, sigma
 
 # =============================================
-# utils for CalibrationResult | toy_data visualization
+# utils for raw data (score matrix) visualization
 # ---------------------------------------------
+def visualize_score_matrix(score_matrix, tester_threshold_idx=None, question_threshold_idx=None):
+    """
+    Visualizes the summations along axis 0 and axis 1 of a score matrix.
+
+    Args:
+        score_matrix (np.ndarray): The score matrix (e.g., Y_ij).
+        tester_threshold_idx (int, optional): Index to draw a vertical line on the tester raw scores plot and color points differently.
+        question_threshold_idx (int, optional): Index to draw a vertical line on the question raw scores plot and color points differently.
+    """
+    # Calculate summations
+    sum_axis_0 = score_matrix.sum(axis=0)
+    sum_axis_1 = score_matrix.sum(axis=1)
+
+    # Create subplots
+    fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+
+    # Plot summation along axis 0 (histogram)
+    axes[0, 0].set_title('Summation along Axis 0 (Testers)')
+    axes[0, 0].set_xlabel('Total Score')
+    axes[0, 0].set_ylabel('Frequency')
+    if tester_threshold_idx is not None:
+        axes[0, 0].hist(sum_axis_0[:tester_threshold_idx], bins=20, alpha=0.7, label='Group 1', color='skyblue')
+        axes[0, 0].hist(sum_axis_0[tester_threshold_idx:], bins=20, alpha=0.7, label='Group 2', color='orange')
+        axes[0, 0].legend()
+    else:
+        axes[0, 0].hist(sum_axis_0, bins=20)
+
+    # Plot summation along axis 1 (histogram)
+    axes[0, 1].set_title('Summation along Axis 1 (Questions)')
+    axes[0, 1].set_xlabel('Total Score')
+    axes[0, 1].set_ylabel('Frequency')
+    if question_threshold_idx is not None:
+        axes[0, 1].hist(sum_axis_1[:question_threshold_idx], bins=20, alpha=0.7, label='Group 1', color='red')
+        axes[0, 1].hist(sum_axis_1[question_threshold_idx:], bins=20, alpha=0.7, label='Group 2', color='green')
+        axes[0, 1].legend()
+    else:
+        axes[0, 1].hist(sum_axis_1, bins=20, color='darkred')
+
+
+    # Plot raw values of summation along axis 0
+    axes[1, 0].set_title('Raw Values of Summation along Axis 0 (Testers)')
+    axes[1, 0].set_xlabel('Tester Index')
+    axes[1, 0].set_ylabel('Total Score')
+    if tester_threshold_idx is not None:
+        axes[1, 0].axvline(x=tester_threshold_idx, color='k', linestyle='--')
+        axes[1, 0].plot(np.arange(tester_threshold_idx), sum_axis_0[:tester_threshold_idx], marker='o', linestyle='', color='skyblue', label='Group 1')
+        axes[1, 0].plot(np.arange(tester_threshold_idx, len(sum_axis_0)), sum_axis_0[tester_threshold_idx:], marker='o', linestyle='', color='orange', label='Group 2')
+        axes[1, 0].legend()
+    else:
+        axes[1, 0].plot(sum_axis_0, marker='o', linestyle='')
+
+
+    # Plot raw values of summation along axis 1
+    axes[1, 1].set_title('Raw Values of Summation along Axis 1 (Questions)')
+    axes[1, 1].set_xlabel('Question Index')
+    axes[1, 1].set_ylabel('Total Score')
+    if question_threshold_idx is not None:
+        axes[1, 1].axvline(x=question_threshold_idx, color='k', linestyle='--')
+        axes[1, 1].plot(np.arange(question_threshold_idx), sum_axis_1[:question_threshold_idx], marker='o', linestyle='', color='red', label='Group 1')
+        axes[1, 1].plot(np.arange(question_threshold_idx, len(sum_axis_1)), sum_axis_1[question_threshold_idx:], marker='o', linestyle='', color='green', label='Group 2')
+        axes[1, 1].legend()
+    else:
+         axes[1, 1].plot(sum_axis_1, marker='o', linestyle='', color='darkred')
+
+
+    plt.tight_layout()
+    plt.show()
+    
+# =============================================
+# utils for CalibrationResult | data & model parameters visualization
+# ---------------------------------------------
+
 def create_item_information_figure(a_params, b_params, c_params, item_labels, theta_range=None):
     """
     Creates a Plotly figure of the Item Information Functions (IIF) for each of selected items.
@@ -224,7 +297,7 @@ def plot_test_characteristic_curve(
 
     return fig
 
-def plot_b_theta_histograms(ax, generative_data: dict | CalibrationResult, 
+def plot_b_theta_histograms(ax, generative_data: dict | CalibrationResult | ClassicCalibrationResult, 
                             title: str, avg_Y: float | None = None):
     """Single-panel histogram plot: θ_j_true, b_i_true, and optional θ_j_max overlay.
     generative_data is either an output from the paper's GEM (CalibrationResult type)
@@ -239,16 +312,22 @@ def plot_b_theta_histograms(ax, generative_data: dict | CalibrationResult,
         theta = generative_data.theta_j_mean
         b = generative_data.b_i
         tmax = theta + generative_data.gamma_j * np.max(generative_data.info["data_input"].B_ij, axis=0)
+    elif isinstance(generative_data, ClassicCalibrationResult):
+        theta = generative_data.theta_j_mean
+        b = generative_data.b_i
+        tmax = None
 
-    all_values = np.concatenate([b, theta, tmax])
+    all_values = np.concatenate([b, theta])
+    if tmax is not None:
+        all_values = np.concatenate([all_values, tmax])
     min_val = np.min(all_values)
     max_val = np.max(all_values)
     bins = np.linspace(min_val, max_val, 50)
 
     if b is not None:
-        ax.hist(b, bins=bins, alpha=0.7, label='b_i_true', color='skyblue')
+        ax.hist(b, bins=bins, alpha=0.7, label='b_i', color='skyblue')
     if theta is not None:
-        ax.hist(theta, bins=bins, alpha=0.7, label='theta_j_true', color='lightcoral')
+        ax.hist(theta, bins=bins, alpha=0.7, label='theta_j', color='lightcoral')
     if tmax is not None:
         ax.hist(tmax, bins=bins, alpha=0.7, label='theta_j_max', color='lightgreen')
     ax.set_title(title)
@@ -262,7 +341,7 @@ def plot_b_theta_histograms(ax, generative_data: dict | CalibrationResult,
     ax.legend()
     ax.grid(True, linewidth=0.4, alpha=0.5)
 
-def plot_multiple_b_theta_histograms(generative_data_list: Sequence[dict | CalibrationResult], 
+def plot_multiple_b_theta_histograms(generative_data_list: Sequence[dict | CalibrationResult | ClassicCalibrationResult], 
                                      data_names_list: Sequence[str], 
                                      plots_per_row: int = 4, 
                                      avg_Y_list: Sequence[float] | None = None):
