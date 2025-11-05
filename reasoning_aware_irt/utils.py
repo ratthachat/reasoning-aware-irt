@@ -418,8 +418,8 @@ def plot_parameter_scatter_with_se(
 
     # Calculate global min/max for the 1:1 line and axis limits
     # We should consider the full range of the error bars for robust axis limits
-    min_data = min(true_values.min(), (estimated_values - estimated_se).min())
-    max_data = max(true_values.max(), (estimated_values + estimated_se).max())
+    min_data = min(true_values.min(), np.nanmin(estimated_values - estimated_se))
+    max_data = max(true_values.max(), np.nanmax(estimated_values + estimated_se))
 
     # Add a small buffer for visualization
     buffer = (max_data - min_data) * 0.05

@@ -37,7 +37,7 @@ class CalibrationConfig:
     # Inference controls
     gh_nodes: int = 17 # 21 # i.e. K
     max_iter: int = 50
-    tol_ll: float = 1e-4
+    tol: float = 1e-4
     seed: Optional[int] = 0
     verbose: bool = True
 
@@ -56,7 +56,7 @@ class CalibrationConfig:
     a_min: float = 0.05
     a_max: float = 5.00
     gamma_min: float = -0.5
-    gamma_max: float = 1.25 
+    gamma_max: float = 2.0 # NOTE: with our standard interpretation, gamma > 1 may be too much, but due to location-scale transform for identifiability, resulted scales may not be intuitive
     lambda_min: float = 0.01
     lambda_max: float = 0.999
 
@@ -175,7 +175,7 @@ class ReasoningAware3PLCalibrator:
                 print(f"iter {t+1:3d}  ll={ll_obs:.6f}   dLL={d:.3e}")
 
             # Convergence
-            if abs(ll_obs - prev_ll) < self.cfg.tol_ll:
+            if abs(ll_obs - prev_ll) < self.cfg.tol:
                 print(f"converged at iter {t+1}: ll={ll_trace[-1]:.6f}")
                 break
             prev_ll = ll_obs
