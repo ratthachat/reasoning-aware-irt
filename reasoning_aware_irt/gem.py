@@ -466,7 +466,7 @@ class ReasoningAware3PLCalibrator:
 
     # ---------- Utilities ----------
 
-    def _prepare_inputs(self, data: CalibrationData) -> Tuple[NDArray, NDArray, NDArray]:
+    def _prepare_inputs(self, data: CalibrationData, strict_Y_int : bool = True) -> Tuple[NDArray, NDArray, NDArray]:
         """Minimal prep: validate shapes/values, build X_ij = log1p(B_ij), broadcast c_i to (Q,)."""
         Y = np.asarray(data.Y_ij, float)
         B = np.asarray(data.B_ij, float)
@@ -477,8 +477,8 @@ class ReasoningAware3PLCalibrator:
             raise ValueError("c_i must be (Q,)")
         if not (np.isfinite(Y).all() and np.isfinite(B).all()):
             raise ValueError("Y_ij and B_ij must be finite.")
-        if ((Y != 0.0) & (Y != 1.0)).any():
-            raise ValueError("Y_ij must be binary 0/1.")
+        if strict_Y_int and ((Y != 0.0) & (Y != 1.0)).any():
+            raise ValueError("In strict mode, Y_ij must be binary 0/1. Set strict_Y_int = False to relax")
         if (B < 0.0).any():
             raise ValueError("B_ij must be >= 0.")
         X = np.log1p(B)        

@@ -1,0 +1,28 @@
+\documentclass{article}
+\usepackage{graphicx} %for images
+
+\title{blank project}
+\author{Ratthachat Chatpatanasiri}
+\date{November 2025}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+With advances and large varieties of recent reasoning-based (i.e. inference-time scaling) language models, rigorous evaluations are essential to understand the true potentials and most suitable applications for each model and size. Therefore, many research teams have put large efforts on inventing rigorous benchmarks on various knowledge areas such as AIME, GPQA, CodeForces and MMLU-Pro.
+
+Conventional approach to measure performances on these benchmarks has been the uses of "straightforward accuracy". Although the straightforward accuracy is a simple and good baseline on performance measurement, it does not take "indiviudal problem (test-data) properties" such as problem difficulty and discrimination into account. This omittence, in turns, make a ranking based on straightforward accuracy fairly unstable in some certain situations. We call the ranking unstability "ranking paradox" which is illustrated in Appendix A in details. This unstableness of rank paradox limits the usefulness of evaluations based on straightforward accuracy.
+
+Item Response Theory (IRT) is a more-sophisticated yet well-established  approach based on psychometrics used to measure high-stake human performances on various well-known tests such as TOEFL, GRE, and GMAT (cite wikipedia or others). IRT is a statistical model that not only estimates a tester's performance, but also a difficulty level and a discrimination level of each question. 
+
+In Appendix A, We show both theoretically and empirically  that with accurate estimations of problem difficulties and problem discriminations, IRT-based ranking measurement are robust to ranking paradox. Therefore, a straightforward application of IRT to measure performance of language models on existing benchmarks can be considered as direct improvement.
+
+However, with the test-time scaling methodology of reasoning-based language models, the "thinking budget cost" becomes crucial factors in applications, and the statistical model in classical IRT has no variable to capture the efficiency of this "thinking budget cost".
+
+In this work, we propose to extend the classical IRT statistical model : 3-parameter logistic regression (3PL) to "reasoning-aware"-3PL model by taking into account three additional factors related to reasoning in language models. 
+
+\section{Our Approach}
+Our extended model 
+
+\end{document}
