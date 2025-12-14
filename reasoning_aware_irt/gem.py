@@ -114,7 +114,7 @@ class ReasoningAware3PLCalibrator:
         self.rng = np.random.default_rng(cfg.seed)
         # GH nodes/weights are created in _make_gh() when needed
 
-    def fit(self, data: CalibrationData) -> CalibrationResult:
+    def fit(self, data: CalibrationData, strict_Y_int : bool = True) -> CalibrationResult:
         """Run EM until convergence.
 
         Returns
@@ -123,7 +123,7 @@ class ReasoningAware3PLCalibrator:
         Parameters, posterior nodes/weights, log‑lik trace, and θ summaries.
         """
 
-        Y_ij, X_ij, c_i = self._prepare_inputs(data)
+        Y_ij, X_ij, c_i = self._prepare_inputs(data, strict_Y_int=strict_Y_int)
         Q, N = Y_ij.shape
 
         a_i, b_i, lambda_i, gamma_j = self._init_params(Y_ij, c_i)
