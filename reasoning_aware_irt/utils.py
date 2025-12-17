@@ -374,8 +374,10 @@ def plot_parameter_scatter_with_se(
     estimated_values: Union[np.ndarray, List[float]],
     estimated_se: Union[np.ndarray, List[float], None] = None,
     param_label: str = "",
-    min_lim: float | None = None,
-    max_lim: float | None = None,
+    min_ylim: float | None = None,
+    max_ylim: float | None = None,
+    min_xlim: float | None = None,
+    max_xlim: float | None = None,
     x_label: str | None = None, 
     y_label: str | None = None,
     title: str | None = None,
@@ -432,13 +434,17 @@ def plot_parameter_scatter_with_se(
             )
 
     # Set axis limits based on buffered min/max except specified by a user
-    if min_lim is None:
-        min_lim = min_val
-    if max_lim is None:
-        max_lim = max_val
+    if min_ylim is None:
+        min_ylim = min_val
+    if max_ylim is None:
+        max_ylim = max_val
+    if min_xlim is None:
+        min_xlim = min_val
+    if max_xlim is None:
+        max_xlim = max_val
 
-    ax.set_xlim(min_lim, max_lim)
-    ax.set_ylim(min_lim, max_lim)
+    ax.set_xlim(min_xlim, max_xlim)
+    ax.set_ylim(min_ylim, max_ylim)
 
     ax.grid(True, which='both', linestyle='--', linewidth=0.5)
     ax.legend()
