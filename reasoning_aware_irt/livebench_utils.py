@@ -155,3 +155,44 @@ def filter_ans_and_score_data(df_ans_initial, df_score_initial, debug=True):
     C_vector = C_series.reindex(Y_ij.columns).fillna(0.0)
     
     return df_ans_filtered, df_score_filtered, Y_ij, B_ij, C_vector
+
+def calculate_c_i_rigorous(row):
+    """
+    Calculates Guessing Parameter (c_i) of each dataframe's row based on problem task / subtask.
+    Valid for 5 categories: math, language, coding, instruction_following, reasoning
+    only updated to public LiveBench on Huggingface (last updated on April, 2025)
+    """
+
+    task = row['task']
+    
+    if task == 'math_comp':
+        if 'aime' in row['subtask']:
+            # Integer 000-999 -> 1/1000
+            return 0.001
+        else:
+            # AMC/SMC are 5-option Multiple Choice -> 1/5
+            return 0.2
+    if task == 'olympiad':
+        from scipy.special import factorial
+        n_elements = len(row["ground_truth"].split(','))
+        return 1/factorial(n_elements) # approx. by gamma function
+    
+    if task == "web_of_lies_v2":
+        return 0.125
+    if task == "spatial":
+        if row["ground_truth"] in ["square", "pentagon", "tetrahedron", "triangle", "tetrahedra", "square pyramid", "circle", "triangular prism", "sphere"]:
+            return 1/7
+        else:
+            return 1/20
+    if task == "zebra_puzzle":
+        return 0.29 # ((1/3 + 1/4)/2) NOT a good way to measure performance
+        
+    
+    if task == 'connections':
+        # 1/70 or less
+        return 0.01
+    
+    # AMPS_Hard (Latex generation) & Olympiad (Proof rearrangement)
+    # Coding, IF, language (beside connections)
+    # The probability of random guessing is negligible.    
+    return 1e-5
