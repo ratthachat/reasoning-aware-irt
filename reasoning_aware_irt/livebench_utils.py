@@ -53,7 +53,7 @@ def perform_eda_checks(data_frame, model_str='model_id'):
     print(f"Expected Rows (if perfect): {expected_rows}")
     print(f"Missing Entries: {expected_rows - n_rows} ({((expected_rows-n_rows)/expected_rows)*100:.2f}%)")
 
-def create_presence_table(data_frame, index_str='model_id', val_str='answer_id', aggfunc='count', force_int=False, debug=False):
+def create_presence_table(data_frame, index_str='model_id', col_str='question_id', val_str='answer_id', aggfunc='count', force_int=False, debug=False):
     """
     data_frame is ideally "df_merged" of filter_valid_models, 
     where we will create an #models x # questions table 
@@ -65,7 +65,7 @@ def create_presence_table(data_frame, index_str='model_id', val_str='answer_id',
     """
     df_presence_table = data_frame.pivot_table(
         index=index_str,
-        columns='question_id',
+        columns=col_str,
         values=val_str,  # Use any column to count presence
         aggfunc=aggfunc       
     )
@@ -172,7 +172,7 @@ def calculate_c_i_rigorous(row):
         else:
             # AMC/SMC are 5-option Multiple Choice -> 1/5
             return 0.2
-    if task == 'olympiad':
+    if task == 'olympiad' and "ground_truth" in row.keys(): # IMO, USAMO
         from scipy.special import factorial
         n_elements = len(row["ground_truth"].split(','))
         return 1/factorial(n_elements) # approx. by gamma function
@@ -180,7 +180,7 @@ def calculate_c_i_rigorous(row):
     if task == "web_of_lies_v2":
         return 0.125
     if task == "spatial":
-        if row["ground_truth"] in ["square", "pentagon", "tetrahedron", "triangle", "tetrahedra", "square pyramid", "circle", "triangular prism", "sphere"]:
+        if "ground_truth" in row.keys() and row["ground_truth"] in ["square", "pentagon", "tetrahedron", "triangle", "tetrahedra", "square pyramid", "circle", "triangular prism", "sphere"]:
             return 1/7
         else:
             return 1/20
