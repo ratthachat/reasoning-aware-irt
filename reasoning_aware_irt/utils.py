@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 import plotly.graph_objects as go
 
-from .gem import CalibrationResult
+from .gem_item_gate import CalibrationResult
 from .classic_irt_em import ClassicCalibrationResult
 
 def prob_correct_3pl(theta, a, b, c):
