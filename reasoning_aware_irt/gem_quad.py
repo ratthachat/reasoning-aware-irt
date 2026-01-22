@@ -68,6 +68,9 @@ class CalibrationConfig:
     kappa_min: float = -2.0
     kappa_max: float = -EPS
 
+    x0_j: Optional[np.ndarray] = None # shape (N,), mu of optimal log1p budget
+    ridge_x0: float = 0.1
+
     def __post_init__(self) -> None:
         if self.use_quadratic:
             # concavity: gamma >= 0, kappa < 0
@@ -450,6 +453,11 @@ class ReasoningAware3PLQuadraticCalibrator:
 
             if np.allclose(v1_i, 0.0) and np.allclose(v2_i, 0.0):
                 continue
+            
+            if self.cfg.x0_j is not None:
+                x0_j = self.cfg.x0_j[j] 
+            else:
+                x0_j = np.median(X[:, j][X[:, j] > 0])
 
             def obj_grad(params: NDArray) -> Tuple[float, NDArray]:
                 gamma = float(params[0])      # scalar
@@ -471,6 +479,13 @@ class ReasoningAware3PLQuadraticCalibrator:
 
                 grad_gamma = -np.sum(wg * v1_i[:, None]) + 2.0 * rg * (gamma - mu_gamma)         # scalar
                 grad_kappa = -np.sum(wg * v2_i[:, None]) + 2.0 * rk * (kappa - mu_kappa)         # scalar
+
+                # simple modification to regularize optimal log-budget
+                t = (gamma + 2.0*kappa*x0_j)
+                alpha_x = self.cfg.ridge_x0
+                obj += alpha_x * (t*t)
+                grad_gamma += 2.0*alpha_x * t
+                grad_kappa += 4.0*alpha_x * x0_j * t
 
                 return float(obj), np.array([grad_gamma, grad_kappa], dtype=float)
 
