@@ -947,20 +947,20 @@ class ReasoningAware3PLQuadraticCalibrator:
         c_i: NDArray,
         *,
         use_quadratic: bool,
+        eps: float = 1e-3 # local EPS to avoid extreme init of b_i
     ) -> Tuple[NDArray, NDArray, NDArray, NDArray]:
         Y = np.asarray(Y_ij, float)          # (Q,N)
         Q, N = Y.shape                       # scalars
 
-        # ------------------------------------------------------------
-        # (1) Reduced 3PL seeding (ignore budget, take a_i≈1)
-        #     p_ij ≈ c_i + (1−c_i)·σ(theta − b_i)
-        #     p_i = mean_j Y_ij
-        #     s_i = (p_i − c_i)/(1 − c_i) ∈ (0,1)
-        # ------------------------------------------------------------
+        # Model ref: p_ij ≈ c_i + (1−c_i)·σ(theta − b_i)        
         p_i = np.mean(Y, axis=1)             # (Q,)
-        denom = np.clip(1.0 - c_i, EPS, 1.0) # (Q,)
+        denom = np.clip(1.0 - c_i, eps, 1.0) # (Q,)
         s_i = (p_i - c_i) / denom            # (Q,)
-        s_i = np.clip(s_i, EPS, 1.0 - EPS)   # (Q,)
+
+        # fix cases where c_i is abnormally large
+        s_i[s_i <= 0] = p_i[s_i <= 0]
+
+        s_i = np.clip(s_i, eps, 1.0 - eps)   # (Q,)
         logit_s = np.log(s_i) - np.log(1.0 - s_i)  # (Q,)
 
         a_i = np.full(Q, float(self.cfg.mu_a), dtype=float)
