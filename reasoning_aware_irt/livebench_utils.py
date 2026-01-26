@@ -175,6 +175,14 @@ def calculate_c_i_rigorous(row):
     if task == 'olympiad' and "ground_truth" in row.keys(): # IMO, USAMO
         from scipy.special import factorial
         n_elements = len(row["ground_truth"].split(','))
+
+        # for trivial problems having n_elements==1 or 2, we decrease c_i a bit to reflect generative uncertainty
+        # (it becomes resemble the classic reading comprehension task)
+        if n_elements == 1: # avoid c_i = 1.0, which will hardly reflect real-world observations
+            return 0.75
+        if n_elements == 2:
+            return 0.45
+
         return 1/factorial(n_elements) # approx. by gamma function
     
     if task == "web_of_lies_v2":
