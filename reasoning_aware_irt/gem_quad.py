@@ -1098,7 +1098,7 @@ def compute_louis_se(
     *,
     result: CalibrationResult,
     data: CalibrationData | None = None,
-    which: tuple[str, ...] = ("b", "gamma"),
+    which: tuple[str, ...] = ("a", "b", "gamma", "kappa"),
     return_result: bool = False,
     jitter: float = 1e-9,
 ) -> Dict[str, NDArray] | CalibrationResult:
@@ -1156,8 +1156,9 @@ def compute_louis_se(
     out: Dict[str, NDArray] = {}
 
     # -------- b_i SEs (via (a_i,b_i) 2x2 block) --------
-    if "b" in which:
+    if "b" in which or "a" in which:
         b_se = np.full(Q, np.nan, dtype=float)
+        a_se = np.full(Q, np.nan, dtype=float)
 
         for i in range(Q):
             a = float(a_i[i])
@@ -1220,16 +1221,21 @@ def compute_louis_se(
             I[1, 1] += jitter
             try:
                 cov = np.linalg.inv(I)
-                se = float(np.sqrt(max(cov[1, 1], 0.0)))
+                a_se[i] = float(np.sqrt(max(cov[0, 0], 0.0)))
+                b_se[i] = float(np.sqrt(max(cov[1, 1], 0.0)))
             except np.linalg.LinAlgError:
-                se = float("nan")
-            b_se[i] = se
+                a_se[i] = float("nan")
+                b_se[i] = float("nan")
 
-        out["b_se_louis"] = b_se
+        if "a" in which:
+            out["a_se_louis"] = a_se
+        if "b" in which:
+            out["b_se_louis"] = b_se
 
     # -------- gamma_j SEs --------
-    if "gamma" in which:
+    if "gamma" in which or "kappa" in which:
         gamma_se = np.full(N, np.nan, dtype=float)
+        kappa_se = np.full(N, np.nan, dtype=float)
 
         for j in range(N):
             y_i = Y[:, j]              # (Q,)
@@ -1281,6 +1287,7 @@ def compute_louis_se(
                     gamma_se[j] = float(np.sqrt(1.0 / I))
                 else:
                     gamma_se[j] = float("nan")
+                kappa_se[j] = float("nan") # no kappa_se in linear-budget model
 
             else:
                 v2_i = a_i * x2_i
@@ -1318,10 +1325,14 @@ def compute_louis_se(
                 try:
                     cov = np.linalg.inv(I)
                     gamma_se[j] = float(np.sqrt(max(cov[0, 0], 0.0)))
+                    kappa_se[j] = float(np.sqrt(max(cov[1, 1], 0.0)))
                 except np.linalg.LinAlgError:
                     gamma_se[j] = float("nan")
-
-        out["gamma_se_louis"] = gamma_se
+                    kappa_se[j] = float("nan")
+        if "gamma" in which:
+            out["gamma_se_louis"] = gamma_se
+        if "kappa" in which:
+            out["kappa_se_louis"] = kappa_se
 
     if not return_result:
         return out
