@@ -947,6 +947,7 @@ class ReasoningAware3PLQuadraticCalibrator:
         c_i: NDArray,
         *,
         use_quadratic: bool,
+        optimal_kappa: bool = False,
         eps: float = 1e-3 # local EPS to avoid extreme init of b_i
     ) -> Tuple[NDArray, NDArray, NDArray, NDArray]:
         Y = np.asarray(Y_ij, float)          # (Q,N)
@@ -972,7 +973,10 @@ class ReasoningAware3PLQuadraticCalibrator:
         gamma_j = np.clip(gamma_j, self.cfg.gamma_min, self.cfg.gamma_max)
 
         if use_quadratic:
-            kappa_j = np.full(N, float(self.cfg.mu_kappa), dtype=float)
+            if (not optimal_kappa) or (self.cfg.x0_j is None):
+                kappa_j = np.full(N, float(self.cfg.mu_kappa), dtype=float)
+            else:
+                kappa_j = -gamma_j / (2*self.cfg.x0_j)
             kappa_j = np.clip(kappa_j, self.cfg.kappa_min, self.cfg.kappa_max)
         else:
             kappa_j = np.zeros(N, dtype=float)
@@ -1301,7 +1305,7 @@ def compute_louis_se(
 
                 Es1 = float(np.dot(w, s1_k))
                 Es2 = float(np.dot(w, s2_k))
-
+ 
                 Ess11 = float(np.dot(w, s1_k * s1_k))
                 Ess12 = float(np.dot(w, s1_k * s2_k))
                 Ess22 = float(np.dot(w, s2_k * s2_k))
