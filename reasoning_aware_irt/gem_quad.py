@@ -47,6 +47,7 @@ class CalibrationConfig:
     verbose: bool = True
 
     use_quadratic: bool = True
+    optimal_kappa: bool = False
     tau: float = 0.75
 
     ridge_a: float = 1e-3
@@ -129,7 +130,9 @@ class ReasoningAware3PLQuadraticCalibrator:
         Y_ij, X_ij, c_i = self._prepare_inputs(data, strict_Y_int=strict_Y_int)
         Q, N = Y_ij.shape
 
-        a_i, b_i, gamma_j, kappa_j = self._init_params(Y_ij, c_i, use_quadratic=self.cfg.use_quadratic)
+        a_i, b_i, gamma_j, kappa_j = self._init_params(Y_ij, c_i, 
+                                                       use_quadratic=self.cfg.use_quadratic,
+                                                       optimal_kappa=self.cfg.optimal_kappa)
         theta_k, w_k = self._make_gh(self.cfg.gh_nodes)
 
         w_post_jk = np.tile(w_k[None, :], (N, 1))  # (N,K)
