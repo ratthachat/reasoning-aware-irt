@@ -47,6 +47,7 @@ class CalibrationConfig:
     verbose: bool = True
 
     use_quadratic: bool = True
+    use_pin_posthoc: bool = False
     optimal_kappa: bool = False
     tau: float = 0.75
 
@@ -184,14 +185,15 @@ class ReasoningAware3PLQuadraticCalibrator:
             )
 
             # 4) Pin identifiability
-            a_i, b_i, gamma_j, kappa_j = self._pin_identifiability(
-                a_i=a_i,
-                b_i=b_i,
-                gamma_j=gamma_j,
-                kappa_j=kappa_j,
-                w_post_jk=w_post_jk,
-                theta_k=theta_k,
-            )
+            if self.cfg.use_pin_posthoc:
+                a_i, b_i, gamma_j, kappa_j = self._pin_identifiability(
+                    a_i=a_i,
+                    b_i=b_i,
+                    gamma_j=gamma_j,
+                    kappa_j=kappa_j,
+                    w_post_jk=w_post_jk,
+                    theta_k=theta_k,
+                )
 
             if self.cfg.verbose:
                 d = ll_trace[-1] - (ll_trace[-2] if t > 1 else np.nan)
