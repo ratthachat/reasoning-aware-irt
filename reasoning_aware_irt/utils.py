@@ -9,18 +9,38 @@ import plotly.graph_objects as go
 from .gem_item_gate import CalibrationResult
 from .classic_irt_em import ClassicCalibrationResult
 
-def prob_correct_3pl(theta, a, b, c):
+def prob_correct_3pl(theta_j, a_i, b_i, c_i, gamma_j=None, kappa_j=None, x_ij=None):
     """Calculates the probability of a correct response for a given theta and 3PL parameters.
-    theta is 1D N-dimensional
-    a,b,c are 1D Q-dimensional
+    theta_j : (N,)
+    a_i,b_i,c_i : (Q,)
 
+    --Optional for Reasoning-Aware 3PL--
+    gamma_j, kappa_j : (N,)
+    x_ij : (Q,N) -- i.e. np.log1p(B_ij)
+    
     return:
     prob_matrix 2D-array of shape (Q, N)
     """
     # Ensure the argument to exp is within a reasonable range to avoid overflow/underflow
-    exp_arg = -a[:, None] * (theta[None, :] - b[:, None])
+    Q = len(b_i)
+    N = len(theta_j)
+    assert len(a_i)==Q and len(c_i)==Q
+    
+    if gamma_j is not None:
+        assert len(gamma_j)==N
+        assert x_ij.shape==(Q,N)
+        
+        if kappa_j is not None: # quad Reasoning-3PL
+            assert len(kappa_j)==N
+            diff_ij = (theta_j[None, :] + gamma_j[None, :]*x_ij + kappa_j[None, :]*x_ij**2) - b_i[:, None]
+        else: # linear Reasoning-3PL
+            diff_ij = (theta_j[None, :] + gamma_j[None, :]*x_ij) - b_i[:, None]
+    else: # classic 3PL
+        diff_ij = theta_j[None, :] - b_i[:, None]
+    
+    exp_arg = -(a_i[:, None] * diff_ij)
     exp_arg = np.clip(exp_arg, -30, 30)
-    return c[:, None] + (1 - c[:, None]) / (1 + np.exp(exp_arg))
+    return c_i[:, None] + (1 - c_i[:, None]) / (1 + np.exp(exp_arg))
 
 def item_variance_3pl(theta, a, b, c):
     """Calculates the variance for a single item at a given theta level.
