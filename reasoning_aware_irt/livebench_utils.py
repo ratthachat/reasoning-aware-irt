@@ -88,7 +88,7 @@ def create_presence_table(data_frame, index_str='model_id', col_str='question_id
 
     return df_presence_table
 
-def reindex(Y, B, c, valid_model_names):
+def reindex(Y, B, c, valid_model_names=None):
     """
     Ensure Y,B and c matrix have the same indices
     assuming model_id x question_id here
@@ -101,8 +101,9 @@ def reindex(Y, B, c, valid_model_names):
     assert(B.notna().all().all()), "Y has some N/A"
     assert(c.notna().all().all()), "c has some N/A"
     
-    assert list(Y.index) == valid_model_names, "Y's model_id sequence is wrong"
-    assert list(B.index) == valid_model_names, "B's model_id sequence is wrong"
+    if valid_model_names is not None:
+        assert list(Y.index) == valid_model_names, "Y's model_id sequence is wrong"
+        assert list(B.index) == valid_model_names, "B's model_id sequence is wrong"
     
     if list(Y.columns) == list(B.columns):
         print("the question_id Y/B sequence is great!!")
