@@ -95,7 +95,7 @@ def reindex(Y, B, c, valid_model_names=None):
     """
     
     assert Y.shape == B.shape, "B and Y shapes must match"
-    assert Y.shape[1] == len(c), "number of Y / c questions must match"
+    assert Y.shape[0] == len(c), "number of Y / c questions must match"
 
     assert(Y.notna().all().all()), "Y has some N/A"
     assert(B.notna().all().all()), "Y has some N/A"
