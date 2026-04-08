@@ -127,13 +127,18 @@ class ReasoningAware3PLQuadraticCalibrator:
         self.cfg = cfg
         self.rng = np.random.default_rng(cfg.seed)
 
-    def fit(self, data: CalibrationData, strict_Y_int: bool = True) -> CalibrationResult:
+    def fit(self, data: CalibrationData, strict_Y_int: bool = True, init_param_dict = None) -> CalibrationResult:
         Y_ij, X_ij, c_i = self._prepare_inputs(data, strict_Y_int=strict_Y_int)
         Q, N = Y_ij.shape
 
-        a_i, b_i, gamma_j, kappa_j = self._init_params(Y_ij, c_i, 
+        if init_param_dict is None:
+            a_i, b_i, gamma_j, kappa_j = self._init_params(Y_ij, c_i, 
                                                        use_quadratic=self.cfg.use_quadratic,
                                                        optimal_kappa=self.cfg.optimal_kappa)
+        else: # temp addition, not elegant, but work
+            a_i, b_i = init_param_dict['a_i'], init_param_dict['b_i']
+            gamma_j, kappa_j  = init_param_dict['gamma_j'], init_param_dict['kappa_j']
+
         theta_k, w_k = self._make_gh(self.cfg.gh_nodes)
 
         w_post_jk = np.tile(w_k[None, :], (N, 1))  # (N,K)
