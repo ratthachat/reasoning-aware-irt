@@ -393,6 +393,7 @@ def plot_parameter_scatter_with_se(
     true_values: Union[np.ndarray, List[float]],
     estimated_values: Union[np.ndarray, List[float]],
     estimated_se: Union[np.ndarray, List[float], None] = None,
+    se_axis="x_axis",
     param_label: str = "",
     min_ylim: float | None = None,
     max_ylim: float | None = None,
@@ -417,10 +418,18 @@ def plot_parameter_scatter_with_se(
     if estimated_se is None:
         estimated_se = np.zeros_like(estimated_values)
 
+    xerr = np.zeros_like(estimated_values)
+    yerr = np.zeros_like(estimated_values)
+    if se_axis=="x_axis":
+        xerr = estimated_se
+    else:
+        yerr = estimated_se
+
     ax.errorbar(
         x=true_values,
         y=estimated_values,
-        yerr=estimated_se, # Estimated SE provides the error distance
+        xerr=xerr,
+        yerr=yerr, # Estimated SE provides the error distance
         fmt='none',       # Do not plot the data points again
         ecolor='gray',    # Error bar color
         elinewidth=0.8,   # Error bar line thickness
@@ -449,7 +458,7 @@ def plot_parameter_scatter_with_se(
     max_val = max_data + buffer
 
     # Plot the 1:1 reference line
-    ax.plot([min_val, max_val], [min_val, max_val], color='red', linestyle='--', 
+    ax.plot([min_xlim, max_xlim], [max_ylim, min_ylim], color='red', linestyle='--', 
             # label='1:1 Line'
             )
 
