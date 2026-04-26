@@ -402,6 +402,7 @@ def plot_parameter_scatter_with_se(
     x_label: str | None = None, 
     y_label: str | None = None,
     title: str | None = None,
+    plot_ref_line: bool = True,
 ):
     """
     Generates a scatter plot of estimated vs true parameter values,
@@ -458,9 +459,10 @@ def plot_parameter_scatter_with_se(
     max_val = max_data + buffer
 
     # Plot the 1:1 reference line
-    ax.plot([min_xlim, max_xlim], [max_ylim, min_ylim], color='red', linestyle='--', 
-            # label='1:1 Line'
-            )
+    if plot_ref_line:
+        ax.plot([min_xlim, max_xlim], [max_ylim, min_ylim], color='red', linestyle='--', 
+                # label='1:1 Line'
+                )
 
     # Set axis limits based on buffered min/max except specified by a user
     if min_ylim is None:
