@@ -6,6 +6,9 @@ import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 import plotly.graph_objects as go
 
+import seaborn as sns
+from scipy import stats
+
 from .gem_item_gate import CalibrationResult
 from .classic_irt_em import ClassicCalibrationResult
 
@@ -479,3 +482,153 @@ def plot_parameter_scatter_with_se(
 
     ax.grid(True, which='both', linestyle='--', linewidth=0.5)
     ax.legend()
+
+#######################################################################
+## Statistical Test Utils
+def compare_models(p1, p2, y, metric='cross-entropy', test='paired-t', alternative='less', alpha=0.05):
+    """
+    Compares two probabilistic models using strictly proper scoring rules.
+    
+    Parameters:
+    p1, p2      : array-like, probabilistic predictions from Model 1 and Model 2 (0 to 1).
+    y           : array-like, true binary labels (0 or 1).
+    metric      : 'cross-entropy' (Log Loss) or 'square error' (Brier Score).
+    test        : 'paired-t' (compares means) or 'wilcoxon' (compares medians/ranks).
+    alternative : 'less' (default: is p1 loss < p2 loss?), 'two-sided', or 'greater'.
+    alpha       : significance level.
+    """
+    p1, p2, y = np.array(p1), np.array(p2), np.array(y)
+    
+    # 1. Calculate Instance-Level Losses (Smaller is better)
+    if metric == 'square error':
+        loss1 = (p1 - y)**2
+        loss2 = (p2 - y)**2
+        metric_name = "Brier Score (Squared Error)"
+        
+    elif metric == 'cross-entropy':
+        # Clip probabilities to avoid log(0) mathematically
+        eps = 1e-15
+        p1_c = np.clip(p1, eps, 1 - eps)
+        p2_c = np.clip(p2, eps, 1 - eps)
+        loss1 = -(y * np.log(p1_c) + (1 - y) * np.log(1 - p1_c))
+        loss2 = -(y * np.log(p2_c) + (1 - y) * np.log(1 - p2_c))
+        metric_name = "Log Loss (Cross-Entropy)"
+        
+    else:
+        raise ValueError("metric must be 'square error' or 'cross-entropy'")
+
+    # 2. Perform Statistical Test
+    diff = loss1 - loss2
+    if test == 'paired-t':
+        # ttest_rel compares the means of two related samples
+        stat, p_val = stats.ttest_rel(loss1, loss2, alternative=alternative)
+        test_name = "Paired t-test"
+        
+    elif test == 'wilcoxon':
+        # wilcoxon compares the median difference / win-rates
+        stat, p_val = stats.wilcoxon(loss1, loss2, alternative=alternative)
+        test_name = "Wilcoxon Signed-Rank Test"
+        
+    else:
+        ties = np.sum(diff == 0)
+        n_trials = len(diff) - ties
+        
+        # If alternative='less', we hypothesize Loss1 < Loss2. 
+        # So we count M1 wins, and test if the success probability is > 0.5
+        if alternative == 'less':
+            wins = np.sum(diff < 0)
+            res = stats.binomtest(wins, n_trials, p=0.5, alternative='greater')
+        elif alternative == 'greater':
+            wins = np.sum(diff > 0) # Testing if Loss1 > Loss2
+            res = stats.binomtest(wins, n_trials, p=0.5, alternative='greater')
+        else: # two-sided
+            wins = np.sum(diff < 0)
+            res = stats.binomtest(wins, n_trials, p=0.5, alternative='two-sided')
+            
+        stat = wins
+        p_val = res.pvalue
+        test_name = "Sign Test (Binomial)"
+        reason = "it strictly wins significantly more often (ignoring magnitude)"
+
+    # 3. Print the Summary and Conclusion
+    mean_l1, mean_l2 = np.mean(loss1), np.mean(loss2)
+    win_rate = np.mean(loss1 < loss2) * 100
+    
+    print(f"--- Model Comparison Report ---")
+    print(f"Metric Used : {metric_name}")
+    print(f"Test Used   : {test_name} (alternative='{alternative}')")
+    print(f"Model 1 Mean Loss : {mean_l1:.4f}")
+    print(f"Model 2 Mean Loss : {mean_l2:.4f}")
+    print(f"Model 1 Win Rate  : {win_rate:.1f}% of individual predictions\n")
+    
+    print(f"Test Statistic : {stat:.4f}")
+    print(f"p-value        : {p_val:.4e}\n")
+    
+    # 4. Formulate the explicit statistical conclusion
+    if p_val < alpha:
+        if alternative == 'less':
+            claim = "Model 1 is significantly BETTER than Model 2."
+            reason = "its loss is significantly lower" if test == 'paired-t' else "it wins significantly more often"
+        elif alternative == 'greater':
+            claim = "Model 1 is significantly WORSE than Model 2."
+            reason = "its loss is significantly higher" if test == 'paired-t' else "it loses significantly more often"
+        else: # two-sided
+            winner = "Model 1" if mean_l1 < mean_l2 else "Model 2"
+            claim = f"There is a significant difference. {winner} is better."
+            reason = "their distributions differ significantly"
+            
+        print(f"✅ CONCLUSION: {claim}")
+        print(f"   At alpha={alpha}, we reject the null hypothesis because {reason}.")
+    else:
+        print(f"❌ CONCLUSION: No significant difference detected.")
+        print(f"   At alpha={alpha}, we fail to reject the null hypothesis. Any observed difference may be due to chance.")
+
+def visualize_paired_losses(p1, p2, y, metric='square error'):
+    """
+    Visualizes the instance-level losses to reveal magnitude vs frequency paradoxes.
+    """
+    p1, p2, y = np.array(p1), np.array(p2), np.array(y)
+    
+    if metric == 'square error':
+        loss1 = (p1 - y)**2
+        loss2 = (p2 - y)**2
+    elif metric == 'cross-entropy':
+        eps = 1e-15
+        p1_c = np.clip(p1, eps, 1 - eps)
+        p2_c = np.clip(p2, eps, 1 - eps)
+        loss1 = -(y * np.log(p1_c) + (1 - y) * np.log(1 - p1_c))
+        loss2 = -(y * np.log(p2_c) + (1 - y) * np.log(1 - p2_c))
+    else:
+        raise ValueError("metric must be 'square error' or 'cross-entropy'")
+
+    diff = loss1 - loss2
+    win_rate = np.mean(diff < 0) * 100
+    
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+    
+    # Plot 1: Scatter of Losses
+    # Blue means Model 1 won (Loss 1 < Loss 2)
+    colors = np.where(diff < 0, '#1f77b4', '#d62728') 
+    ax1.scatter(loss1, loss2, alpha=0.6, c=colors, edgecolor='k')
+    
+    # Identity line (y=x)
+    max_val = max(loss1.max(), loss2.max())
+    ax1.plot([0, max_val], [0, max_val], 'k--', lw=2, label='Tie Line')
+    
+    ax1.set_xlabel('Model 1 Loss')
+    ax1.set_ylabel('Model 2 Loss')
+    ax1.set_title(f'Instance Losses (M1 Win Rate: {win_rate:.1f}%)')
+    ax1.text(0.05, 0.95, 'M1 Wins (Blue)', color='#1f77b4', transform=ax1.transAxes, weight='bold')
+    ax1.text(0.95, 0.05, 'M2 Wins (Red)', color='#d62728', transform=ax1.transAxes, ha='right', weight='bold')
+    
+    # Plot 2: Histogram of Differences
+    sns.histplot(diff, bins=40, kde=True, ax=ax2, color='gray')
+    ax2.axvline(0, color='black', linestyle='--', lw=2)
+    ax2.set_xlabel('Difference (Loss 1 - Loss 2)')
+    ax2.set_ylabel('Count')
+    ax2.set_title('Distribution of Loss Differences')
+    ax2.text(0.05, 0.95, 'M1 is Better\n(Negative Diff)', transform=ax2.transAxes, color='#1f77b4', weight='bold')
+    ax2.text(0.95, 0.95, 'M2 is Better\n(Positive Diff)', transform=ax2.transAxes, ha='right', color='#d62728', weight='bold')
+    
+    plt.tight_layout()
+    plt.show()
