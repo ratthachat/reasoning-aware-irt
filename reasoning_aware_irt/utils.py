@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 from numpy import ndarray
 from typing import *
 
@@ -482,6 +483,138 @@ def plot_parameter_scatter_with_se(
 
     ax.grid(True, which='both', linestyle='--', linewidth=0.5)
     ax.legend()
+
+#######################################################################
+## paper plot
+def plot_overlaid_barplot(ax, categories, vals_bg, vals_fg, title, x_label="x-axis", color='g'):
+    """
+    Plots a single overlaid bar chart on a specific matplotlib axis.
+    """
+    # Build the dataframe dynamically
+    df = pd.DataFrame({
+        'category': categories,
+        'background': vals_bg,
+        'foreground': vals_fg
+    })
+    
+    # Plot the background (pastel) bars
+    sns.set_color_codes("pastel")
+    sns.barplot(x="background", y="category", data=df, color=color, ax=ax)
+    
+    # Plot the foreground (muted) bars over them
+    sns.set_color_codes("muted")
+    sns.barplot(x="foreground", y="category", data=df, color=color, ax=ax)
+    
+    # Formatting
+    ax.set_title(title)
+    ax.set_xlabel(x_label)
+    ax.set_ylabel('') # Replaces your `y=""` trick
+
+def plot_grid(N, M, datasets, pdf_name=None, 
+              plot_func=plot_overlaid_barplot, subplot_titles=[],
+              M_multiplier=4, N_multiplier=1.5, plot_single_legend=False):
+    """
+    Creates an N x M grid of subplots and populates them using plot_overlaid_barplot.
+    
+    datasets: A list of dictionaries containing the data for each subplot.
+    """
+    # 1. Global style setup
+    # sns.set_context('paper', font_scale=1.2)
+    # sns.set_style('whitegrid')
+    
+    # 2. Create the figure and N x M axes
+    # Adjust figsize based on the grid dimensions
+    fig, axes = plt.subplots(N, M, figsize=(M * M_multiplier, N * N_multiplier))
+    
+    # Ensure axes is a 1D array so we can easily loop over it, 
+    # even if N=1 or M=1
+    axes_flat = np.atleast_1d(axes).flatten()
+    
+    # 3. Loop through the datasets and plot
+    for i, data in enumerate(datasets):
+        if i >= len(axes_flat):
+            print(f"Warning: More datasets ({len(datasets)}) than subplots ({len(axes_flat)}).")
+            break
+            
+        ax = axes_flat[i]
+        
+        if plot_func==plot_overlaid_barplot:
+            plot_func(ax=ax, categories=data['categories'],
+                      vals_bg=data['bg'], vals_fg=data['fg'],
+                      title=data['title'], x_label=data['x_label'],
+                      color=data['color'])
+        else: # DEFAULT alternative: plot_dumbbell - 1 dumbbell plot = multi bar-graph plots
+            group_data = data # it's actually a group of datasets - (superset of bar-graph data), different data preparation
+            subplot_title = subplot_titles[i]
+            categories = group_data[0]['categories']
+
+            plot_legend = True if i==0 or not plot_single_legend else False
+            plot_dumbbell(ax, group_data, categories, title=subplot_title, plot_legend=plot_legend)
+        
+    # 4. Hide any unused subplots (if datasets < N * M)
+    for j in range(len(datasets), len(axes_flat)):
+        fig.delaxes(axes_flat[j])
+        
+    # Prevent labels from overlapping
+    plt.tight_layout()
+    plt.show()
+
+    if pdf_name is not None:
+        print(f'save figure-grid to {pdf_name}')
+        fig.savefig(pdf_name, format="pdf", bbox_inches="tight", dpi=300, pad_inches=0.0, transparent=True)
+
+def plot_dumbbell(ax=None, datasets=None, categories=None, x_label="", y_labels=None,
+                  title="", plot_legend=True, figsize=(10, 6), save_path=None, x_ticks=None,
+                  nickname=[], x_nickname=0.52, y_nickname=0.9, se_vals=None, **argv):
+    """
+    Plots a single dumbbell subplot. Each dataset in 'datasets' becomes one y-axis row.
+    """
+    if ax is None:
+        fig, ax = plt.subplots(1, 1, figsize=figsize)
+
+    if y_labels is None:
+        y_labels = [d['title'] for d in datasets]
+    colors = sns.color_palette("Set2", len(categories)) # Distinct colors for legend
+    
+    for i, data in enumerate(datasets):
+        vals = data['bg'] #data['values']
+        se_vals = data.get('se_vals', None)
+        # 1. Draw the horizontal line segment connecting the min and max values
+        ax.plot([min(vals), max(vals)], [i, i], color='gray', alpha=0.4, zorder=1, lw=2.5)
+        
+        # 2. Draw the dots for each category
+        for j, val in enumerate(vals):
+            # Only assign the label on the first row so the legend doesn't duplicate
+            leg_label = categories[j] if i == 0 else ""
+            ax.scatter(val, i, color=colors[j], s=120, zorder=2, 
+                       label=leg_label, edgecolor='w', alpha=0.7)
+
+
+            # --- Draw the horizontal error bar ---
+            if se_vals is not None and j < len(se_vals):
+                ax.errorbar(val, i, xerr=se_vals[j], fmt='none', ecolor=colors[j], 
+                            capsize=4, capthick=1.5, zorder=1.5, alpha=0.7)
+            
+            if len(nickname)>0 and i==0:
+                ax.text(x_nickname, y_nickname-j*0.1, nickname[j], 
+                color=colors[j], 
+                fontsize=10, 
+                transform=ax.transAxes)
+            
+    # Formatting
+    ax.set_yticks(range(len(datasets)))
+    ax.set_yticklabels(y_labels)
+    if x_ticks is not None:
+        ax.set_xticks(x_ticks)
+    ax.set_xlabel(x_label)
+    if title: ax.set_title(title, fontsize=9)
+    
+    # Place legend cleanly outside the plot or in a good spot
+    if plot_legend:
+        ax.legend(title="Method", loc='center left', bbox_to_anchor=(1, 0.5))
+    if save_path is not None:
+        print(f'save fig to {save_path} ... success!')
+        plt.savefig(save_path, format='pdf', bbox_inches='tight', dpi=300, pad_inches=0.0, transparent=True)
 
 #######################################################################
 ## Statistical Test Utils
