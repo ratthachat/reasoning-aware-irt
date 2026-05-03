@@ -106,16 +106,22 @@ def reindex(Y, B, c, valid_model_names=None):
         assert list(B.index) == valid_model_names, "B's model_id sequence is wrong"
     
     if list(Y.columns) == list(B.columns):
-        print("the question_id Y/B sequence is great!!")
+        print("the model_id Y/B sequence is great!!")
     else:
         print("Swap B columns' order!!")
         B = B[Y.columns]
-        
-    if list(Y.columns) == list(c.index):
+
+    if list(Y.index) == list(B.index):
+        print("the question_id Y/B sequence is great!!")
+    else:
+        print("reindex B!!")
+        c = c.reindex(Y.index)
+
+    if list(Y.index) == list(c.index):
         print("the question_id Y/c sequence is great!!")
     else:
         print('reindex c!!')
-        c = c.reindex(Y.columns)
+        c = c.reindex(Y.index)
 
     return Y, B, c
 
