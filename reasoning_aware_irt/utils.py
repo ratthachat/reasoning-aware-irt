@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import math
 from numpy import ndarray
 from typing import *
 
@@ -615,6 +616,55 @@ def plot_dumbbell(ax=None, datasets=None, categories=None, x_label="", y_labels=
     if save_path is not None:
         print(f'save fig to {save_path} ... success!')
         plt.savefig(save_path, format='pdf', bbox_inches='tight', dpi=300, pad_inches=0.0, transparent=True)
+
+def _plot_single_heatmap(ax, corr_matrix, title):
+    sns.heatmap(
+        corr_matrix,
+        annot=True,
+        fmt=".2f",
+        cmap='coolwarm',
+        cbar_kws={'label': 'Rank Correlation Coefficient'},
+        linewidths=.5,
+        linecolor='black',
+        vmin=0, vmax=1,
+        ax=ax
+    )
+    ax.set_title(title, fontsize=16)
+    ax.set_xlabel('Permutation Index', fontsize=12)
+    ax.set_ylabel('Permutation Index', fontsize=12)
+    ax.tick_params(axis='x', rotation=45)
+    ax.tick_params(axis='y', rotation=0)
+
+def plot_correlation_matrices_dynamic(corr_matrices, titles=None):
+    n = len(corr_matrices)
+    if n == 0:
+        print("No correlation matrices provided to plot.")
+        return
+
+    ncols = 3
+    nrows = math.ceil(n / ncols)
+
+    fig, axes = plt.subplots(nrows, ncols, figsize=(ncols * 8, nrows * 7))
+    # Ensure axes is always a 2D array even if nrows or ncols is 1
+    if nrows == 1 and ncols == 1:
+        axes = np.array([[axes]])
+    elif nrows == 1 or ncols == 1:
+        axes = np.atleast_2d(axes)
+
+    for i in range(n):
+        row = i // ncols
+        col = i % ncols
+        current_title = titles[i] if titles and i < len(titles) else f'Correlation Matrix {i + 1}'
+        _plot_single_heatmap(axes[row, col], corr_matrices[i], current_title)
+
+    # Turn off any unused subplots
+    for i in range(n, nrows * ncols):
+        row = i // ncols
+        col = i % ncols
+        fig.delaxes(axes[row, col])
+
+    plt.tight_layout()
+    plt.show()
 
 #######################################################################
 ## Statistical Test Utils
