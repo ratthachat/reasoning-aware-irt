@@ -3,6 +3,8 @@ import matplotlib.pyplot as plt
 from scipy.stats import binned_statistic
 import math
 
+from operator import itemgetter
+
 from .utils import prob_correct_3pl
 
 def estimate_latent(mask, a_i, b_i, c_i, y_i):
@@ -24,7 +26,8 @@ def estimate_gamma_kappa(theta_base, theta_best, optimal_log_budget):
 
 def plot_sliced_bins(X, y, slice_axis=0, num_slices=6, num_bins_per_slice=10, fit_object=None,
                      min_points_per_bin=1, use_quantiles=False, share_y=True, title="GrandTitle",
-                     x1_label="Feature 1 (X1)", x2_label="Feature 2 (X2)", y_label="Target (Y)"):
+                     x1_label="Feature 1 (X1)", x2_label="Feature 2 (X2)", y_label="Target (Y)",
+                     show_fig=False):
     """
     Slices a 2D dataset along 'slice_axis' into 'num_slices' bins. 
     For each slice, generates a 1D binned scatter plot of the OTHER axis vs y.
@@ -159,10 +162,68 @@ def plot_sliced_bins(X, y, slice_axis=0, num_slices=6, num_bins_per_slice=10, fi
     plt.tight_layout()
     fig.subplots_adjust(top=0.91)
     plt.suptitle(title+grand_latent_title)
-    plt.show()
+    
+    if show_fig:
+        plt.show()
+    else:
+        plt.close() # save memory
+
     ret_dict = {"best_B_j" : best_B_j, 
         "best_latent" : best_latent, 
         "gamma" : gamma, 
         "kappa": kappa
         }
     return ret_dict
+
+######################################################################
+# model's print_summary helper
+def print_model_summary(model_list, fit_results, Y_ij, sort_by="m", ascending=False):
+    data = []
+    for j, m in enumerate(model_list):
+        d={} # temp dict
+        d['b_theta'] = fit_results.theta_j_mean[j]
+        d['theta_se'] = fit_results.theta_j_se[j]
+        d['gamma'] = fit_results.gamma_j[j]
+        d['gamma_se'] = fit_results.gamma_bracket_half_tau[j]
+
+        d['kappa'] = np.clip(fit_results.kappa_j[j], a_min=-1.00, a_max=-0.00001)
+        d['kappa_se'] = fit_results.kappa_bracket_half_tau[j] # fit_results.kappa_bracket_half_ideal[j]
+
+        gse, kse = d['gamma_se'], d['kappa_se'] # fit_results.gamma_bracket_half_ideal[j] , fit_results.kappa_bracket_half_tau[j]# 
+        N_SE = 0.0
+        MIN_BUDGET, MAX_BUDGET = 32, 16384
+        d['optimal_log_budget'] = -(d['gamma']+N_SE*gse)/(2*(d['kappa']+N_SE*kse))   # conservative with N_SE
+        d['optimal_budget'] = np.clip(np.exp(d['optimal_log_budget']) - 1, MIN_BUDGET, MAX_BUDGET)
+
+        d["optimal_log_budget"] = np.log1p(d["optimal_budget"]) # also clip here
+        
+        d['avg_budget'] = fit_results.info['B_ij'][:,j].mean()
+        x_j = np.log1p(d['avg_budget'])
+        d['eff_theta'] = d['b_theta'] + x_j* d['gamma'] + x_j**2 * d['kappa']
+        d['best_theta'] = d['b_theta'] + d['optimal_log_budget'] * d['gamma'] + d['optimal_log_budget']**2 * d['kappa']
+        
+        d['eff_se'] = d['theta_se'] + d['optimal_log_budget']/2 * gse + (d['optimal_log_budget']/2)**2 * kse
+        d['best_se'] = d['theta_se'] + d['optimal_log_budget'] * gse + d['optimal_log_budget']**2 * kse
+        
+        d['avg_y'] = Y_ij[:, j].mean()
+        d['m'] = m
+        data.append(d)
+
+    data.sort(key=itemgetter(sort_by), reverse=not ascending)
+
+    for d in data:
+        # se is quite small, so we ignore them
+        print(
+            f"{d['m']:<{35}} | "
+            f"BaseTheta: {d['b_theta']:6.2f} ± {d['theta_se']:.3f}| "
+            f"Gamma: {d['gamma']:7.4f} ± {d['gamma_se']:.4f}| "
+            f"Kappa: {d['kappa']:7.4f} ± {d['kappa_se']:.4f} |"
+            f"Avg Y : {d['avg_y']:7.3f}"
+        )
+        print(
+            f"Best Budget: {d['optimal_budget']:5.0f}|"
+            f"BestTheta: {d['best_theta']:7.3f} ± {d['best_se']:7.3f}|"
+            f"Avg. EffTheta: {d['eff_theta']:7.3f} ± {d['eff_se']:7.3f}|"
+        )
+        print()
+    return data
