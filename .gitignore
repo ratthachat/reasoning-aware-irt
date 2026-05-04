@@ -212,7 +212,7 @@ __marimo__/
 
 # Datasets
 # Never commit raw or processed data to Git. Use DVC or store it elsewhere.
-*.csv
+# *.csv <-- acceptable for paper submission!
 *.json
 *.jsonl
 *.npy
