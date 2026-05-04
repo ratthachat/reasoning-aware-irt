@@ -217,7 +217,7 @@ __marimo__/
 *.jsonl
 *.npy
 *.npz
-data/
+# data/
 datasets/
 
 # Model checkpoints and outputs
