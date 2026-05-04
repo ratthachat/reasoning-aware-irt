@@ -175,6 +175,53 @@ def plot_sliced_bins(X, y, slice_axis=0, num_slices=6, num_bins_per_slice=10, fi
         }
     return ret_dict
 
+def extract_slice_data(X, y, slice_axis=0, num_slices=6, target_slice_idx=0, 
+                       use_quantiles=True, slice_label="X"):
+    """
+    Extracts a 1D subset of data (X_plot, Y) by slicing along 'slice_axis'.
+    Returns: sub_x (1D array), sub_y (1D array), slice_title (str)
+    """
+    X, y = np.asarray(X), np.asarray(y)
+    
+    # 1. Route the variables
+    if slice_axis == 0:
+        x_slice, x_plot = X[:, 0], X[:, 1]
+    else:
+        x_slice, x_plot = X[:, 1], X[:, 0]
+
+    # 2. Filter sparse data (Must match your original logic for consistency)
+    if not use_quantiles: 
+        p02_s, p98_s = np.percentile(x_slice, [2, 98])
+        p02_p, p98_p = np.percentile(x_plot, [2, 98])
+        valid_mask = (x_slice >= p02_s) & (x_slice <= p98_s) & (x_plot >= p02_p) & (x_plot <= p98_p)
+        x_slice, x_plot, y = x_slice[valid_mask], x_plot[valid_mask], y[valid_mask]
+
+    # 3. Calculate Edges (incorporating the zero-variance fix!)
+    if np.min(x_slice) == np.max(x_slice):
+        val = x_slice[0]
+        slice_edges = np.array([val - 0.5, val + 0.5])
+        num_slices = 1
+    else:
+        if use_quantiles:
+            slice_edges = np.unique(np.quantile(x_slice, np.linspace(0, 1, num_slices + 1)))
+            num_slices = len(slice_edges) - 1
+        else:
+            slice_edges = np.linspace(np.min(x_slice), np.max(x_slice), num_slices + 1)
+
+    # 4. Safely bound the target index
+    target_slice_idx = min(max(0, target_slice_idx), num_slices - 1)
+
+    # 5. Create the mask for this specific slice
+    if target_slice_idx == num_slices - 1:
+        mask = (x_slice >= slice_edges[target_slice_idx]) & (x_slice <= slice_edges[target_slice_idx+1])
+    else:
+        mask = (x_slice >= slice_edges[target_slice_idx]) & (x_slice < slice_edges[target_slice_idx+1])
+        
+    # Generate a clean mathematical title for the legend
+    title = f"{slice_label} $\in$ [{slice_edges[target_slice_idx]:.2f}, {slice_edges[target_slice_idx+1]:.2f}]"
+    
+    return x_plot[mask], y[mask], title
+
 ######################################################################
 # model's print_summary helper
 def print_model_summary(model_list, fit_results, Y_ij, sort_by="m", ascending=False):

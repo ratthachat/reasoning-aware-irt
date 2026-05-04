@@ -4,12 +4,14 @@ import math
 from numpy import ndarray
 from typing import *
 
+from scipy import stats
+from scipy.stats import binned_statistic, binned_statistic_2d
+from scipy.optimize import curve_fit
+
 import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 import plotly.graph_objects as go
-
 import seaborn as sns
-from scipy import stats
 
 from .gem_item_gate import CalibrationResult
 from .classic_irt_em import ClassicCalibrationResult
@@ -665,6 +667,278 @@ def plot_correlation_matrices_dynamic(corr_matrices, titles=None):
 
     plt.tight_layout()
     plt.show()
+
+def quadratic_func(x, a, b, c):
+    return a * x**2 + b * x + c
+
+def plot_binned_with_quad_fit(x, y, num_bins=10, best_bin_thresh=30, min_points_per_bin=3, use_quantiles=False,
+                              ax=None, return_best_bin=False, plot_quad=False, x_label="x-axis", y_label="y-axis",
+                              display_legend=True, color='blue', label='Binned Data', alpha=0.7, size_norm=1,
+                              show_count=True):
+    x, y = np.asarray(x), np.asarray(y)
+    if not use_quantiles: # remove sparse left&right data
+        p02, p98 = np.percentile(x, [2, 98])
+        valid_mask = (x >= p02) & (x <= p98)
+        x, y = x[valid_mask], y[valid_mask]
+    if len(x) == 0:
+        print("No data to plot."); return
+    
+    # 1. Setup Bins
+    x_min, x_max = x.min(), x.max()
+    if x_min == x_max:
+        bin_edges = np.array([x_min - 0.5, x_min + 0.5])
+        bin_centers = np.array([x_min])
+    else:
+        if use_quantiles:
+            # Quantile binning: forces roughly equal number of points per bin
+            probabilities = np.linspace(0, 1, num_bins + 1)
+            bin_edges = np.quantile(x, probabilities)
+            # If many identical 'x' values exist, quantiles can overlap. 
+            # np.unique prevents errors but might slightly reduce num_bins in extreme edge cases.
+            bin_edges = np.unique(bin_edges) 
+        else:
+            # Traditional equal-width binning (will create sparse bins if data is skewed)
+            bin_edges = np.linspace(x_min, x_max, num_bins + 1)
+            
+        bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+
+    # 2. Calculate Statistics using binned_statistic
+    y_averages = binned_statistic(x, y, statistic='mean', bins=bin_edges).statistic
+    n_points_per_bin = binned_statistic(x, y, statistic='count', bins=bin_edges).statistic
+
+    # 3. Setup Plotting
+    if ax is None:
+        fig, ax = plt.subplots(1, 1, figsize=(10, 6))
+
+    # Mask 1: For plotting dots (all bins with data)
+    has_data_mask = ~np.isnan(y_averages) & (n_points_per_bin > min_points_per_bin)
+    
+    if not np.any(has_data_mask):
+        ax.text(0.5, 0.5, "No data points found.", transform=ax.transAxes, ha='center')
+        return
+
+    # Scatter plot with scaled sizes
+    max_pts = n_points_per_bin.max()
+    sizes = (n_points_per_bin[has_data_mask] / max_pts * 400 + 20)
+    ax.scatter(bin_centers[has_data_mask], y_averages[has_data_mask], 
+               s=sizes*size_norm, alpha=alpha, c=[color], edgecolors='w', label=label)
+
+    # Add count labels
+    if show_count:
+        for i in np.where(has_data_mask)[0]:
+            ax.text(bin_centers[i], y_averages[i], f'{int(n_points_per_bin[i])}', 
+                    fontsize=12, ha='center', va='bottom', weight='bold')
+
+    # 4. Constrained Fitting
+    # Mask 2: For fitting (only high-confidence bins)
+    has_data_mask2 = has_data_mask & (n_points_per_bin > best_bin_thresh)
+    best_bin = None
+
+    if np.any(has_data_mask2):
+        fit_x = bin_centers[has_data_mask2]
+        fit_y = y_averages[has_data_mask2]
+        best_bin = fit_x[np.argmax(fit_y)]
+
+        try:
+            # Curve fit with a non-zero guess for 'a' to help convergence
+            popt, _ = curve_fit(quadratic_func, fit_x, fit_y, 
+                                p0=[-1e-6, 1e-3, np.mean(fit_y)], 
+                                bounds=([-np.inf, 0, -np.inf], [0, np.inf, np.inf]))
+
+            if plot_quad:
+                x_fit = np.linspace(x_min, x_max, 100)
+                ax.plot(x_fit, quadratic_func(x_fit, *popt), 'r--', label='Constrained Fit')
+            
+                # Formatting info text
+                text_str = f"a={popt[0]:.4e}\nb={popt[1]:.4e}\nc={popt[2]:.2f}\nbest_bin={best_bin:.0f}"
+                ax.text(0.05, 0.95, text_str, transform=ax.transAxes, verticalalignment='top',
+                        bbox=dict(boxstyle='round', fc='wheat', alpha=0.5))
+        except Exception as e:
+            print(f"Fit failed: {e}")
+
+    # Final visual adjustments
+    ax.set_xlabel(x_label)
+    ax.set_ylabel(y_label)
+    if display_legend:
+        ax.legend()
+    ax.grid(True, linestyle='--', alpha=0.6)
+
+    if return_best_bin:
+        return best_bin
+    else:
+        return None
+    
+def plot_combined_binned_data(datasets, save_path=None, xlabel="X-axis", ylabel="Y-axis", 
+                              title="Combined Binned Data",figsize=(10, 6),
+                              show_legend=True, nickname=False, x_nickname=0.03, y_nickname=0.4):
+    """
+    Plots multiple binned datasets onto a single 2D figure with transparency and a legend.
+    """
+    fig, ax = plt.subplots(figsize=figsize)
+    best_bin_list = []
+    
+    # Generate distinct colors for the datasets
+    colors = plt.cm.tab10(np.linspace(0, 1, len(datasets)+1))
+
+    for i, data in enumerate(datasets):
+        plot_function = data.get('plot_function')
+        kwargs = data.get('plot_function_argv', {}).copy()
+        
+        # Inject styling into the underlying plot function
+        kwargs['color'] = colors[i+1]
+        kwargs['label'] = data.get('title', f'Dataset {i+1}')
+        kwargs['alpha'] = 0.6  # Make transparent so overlapping bins are visible
+        
+        best_bin = plot_function(data['x'], data['y'], ax=ax, **kwargs)
+        best_bin_list.append(best_bin)
+        
+        if nickname:
+            ax.text(x_nickname, y_nickname-i*0.1, data['nickname'], 
+            color=colors[i+1], 
+            fontsize=9, 
+            transform=ax.transAxes)
+
+    # Global formatting
+    ax.set_title(title)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.grid(True, linestyle='--', alpha=0.6)
+    
+    # Fix the legend (avoids duplicate legends if the underlying function calls ax.legend())
+    handles, labels = ax.get_legend_handles_labels()
+    if handles:
+        # Dictionary trick to remove duplicates if any
+        by_label = dict(zip(labels, handles))
+        if show_legend:
+            ax.legend(by_label.values(), by_label.keys(), framealpha=0.9)
+
+    plt.tight_layout()
+    
+    if save_path is not None:
+        print(f'save fig to {save_path} ... success!')
+        plt.savefig(save_path, format='pdf', bbox_inches='tight', dpi=300, pad_inches=0.0, transparent=True)
+        
+    plt.show()
+    return best_bin_list
+
+def plot_bins_2d(X, y, num_bins=10, min_points_per_bin=3, use_quantiles=False,
+                 ax=None, fig=None, row=None, col=None, use_plotly=False, return_best_bin=False, 
+                 x1_label="Feature 1", x2_label="Feature 2", z_label="Target (Y)", alpha=0.8, box_aspect=(1, 1, 1),
+                 label="", cmap='viridis', figsize=(10, 6), show_colorbar=True, save_path=None, show_count=True,
+                 title=None, title_pad=0, **kwargs):
+    
+    X, y = np.asarray(X), np.asarray(y)
+    if X.ndim != 2 or X.shape[1] != 2: raise ValueError("X must be a 2D array [N, 2]")
+    x1, x2 = X[:, 0], X[:, 1]
+    
+    if not use_quantiles:
+        p02_x1, p98_x1 = np.percentile(x1, [2, 98])
+        p02_x2, p98_x2 = np.percentile(x2, [2, 98])
+        valid_mask = (x1 >= p02_x1) & (x1 <= p98_x1) & (x2 >= p02_x2) & (x2 <= p98_x2)
+        x1, x2, y = x1[valid_mask], x2[valid_mask], y[valid_mask]
+        
+    if len(x1) == 0: return None
+
+    # 1. Setup Bins
+    def get_bin_edges(data):
+        if np.min(data) == np.max(data): return np.array([np.min(data) - 0.5, np.min(data) + 0.5])
+        if use_quantiles: return np.unique(np.quantile(data, np.linspace(0, 1, num_bins + 1)))
+        return np.linspace(np.min(data), np.max(data), num_bins + 1)
+
+    bin_edges_x1, bin_edges_x2 = get_bin_edges(x1), get_bin_edges(x2)
+    bin_centers_x1 = (bin_edges_x1[:-1] + bin_edges_x1[1:]) / 2
+    bin_centers_x2 = (bin_edges_x2[:-1] + bin_edges_x2[1:]) / 2
+
+    # 2. Calculate Statistics
+    stats_mean = binned_statistic_2d(x1, x2, y, statistic='mean', bins=[bin_edges_x1, bin_edges_x2])
+    stats_count = binned_statistic_2d(x1, x2, y, statistic='count', bins=[bin_edges_x1, bin_edges_x2])
+    
+    CX1, CX2 = np.meshgrid(bin_centers_x1, bin_centers_x2, indexing='ij')
+
+    # Masking
+    cx1_flat, cx2_flat = CX1.flatten(), CX2.flatten()
+    y_flat, counts_flat = stats_mean.statistic.flatten(), stats_count.statistic.flatten()
+
+    has_data_mask = ~np.isnan(y_flat) & (counts_flat > min_points_per_bin)
+    if not np.any(has_data_mask): return None
+
+    plot_x1, plot_x2 = cx1_flat[has_data_mask], cx2_flat[has_data_mask]
+    plot_y, plot_counts = y_flat[has_data_mask], counts_flat[has_data_mask]
+
+    best_idx = np.argmax(plot_y)
+    best_bin = (plot_x1[best_idx], plot_x2[best_idx])
+
+    # ---------------------------------------------------------
+    # 3. PLOTTING (Plotly vs Matplotlib split)
+    # ---------------------------------------------------------
+    max_pts = plot_counts.max()
+
+    if use_plotly:
+        import plotly.graph_objects as go
+        
+        # Plotly size scaling (diameter based instead of area)
+        sizes_pl = (plot_counts / max_pts * 40 + 8) 
+        hover_text = [f"{x1_label}: {xi1:.3f}<br>{x2_label}: {xi2:.3f}<br>{z_label}: {yi:.3f}<br>Count: {int(c)}" 
+                      for xi1, xi2, yi, c in zip(plot_x1, plot_x2, plot_y, plot_counts)]
+
+        trace = go.Scatter3d(
+            x=plot_x1, y=plot_x2, z=plot_y,
+            mode='markers+text',
+            text=[str(int(c)) for c in plot_counts],
+            textposition='top center',
+            textfont=dict(color='black', size=10),
+            marker=dict(
+                size=sizes_pl, color=plot_y, colorscale='Viridis', 
+                showscale=False if fig is not None else True, # Hide colorbar in subplots
+                line=dict(color='white', width=1)
+            ),
+            hoverinfo='text', hovertext=hover_text, name='Binned Data'
+        )
+
+        if fig is not None:
+            fig.add_trace(trace, row=row, col=col)
+        else:
+            fig = go.Figure(data=[trace])
+            fig.update_layout(scene=dict(xaxis_title=x1_label, yaxis_title=x2_label, zaxis_title=z_label))
+            fig.show()
+
+    else:
+        # Existing Matplotlib Logic
+        import matplotlib.pyplot as plt
+        if ax is None:
+            fig = plt.figure(figsize=figsize)
+            ax = fig.add_subplot(111, projection='3d')
+            ax.set_box_aspect(box_aspect)
+            
+        if title is not None:
+            ax.set_title(title, pad=title_pad, y=1.0, fontsize=8)
+        
+        sizes_mpl = (plot_counts / max_pts * 300 + 50)
+        scatter = ax.scatter(plot_x1, plot_x2, plot_y, s=sizes_mpl, c=plot_y, cmap=cmap, edgecolors='w',
+                             alpha=alpha, linewidths=1, label=label)
+        # scatter = ax.scatter(plot_x1, plot_x2, plot_y, s=sizes_mpl, c=plot_y, cmap='viridis', edgecolors='w')
+
+        for i in range(len(plot_x1)):
+            if show_count:
+                ax.text(plot_x1[i], plot_x2[i], plot_y[i], f'{int(plot_counts[i])}', fontsize=9, ha='center', va='bottom', weight='bold')
+
+        # Shrink the tick numbers on the axes so they don't overlap 
+        ax.tick_params(axis='x', labelsize=7, pad=-5)
+        ax.tick_params(axis='y', labelsize=7, pad=-5)
+        ax.tick_params(axis='z', labelsize=7, pad=-3) # Z usually needs slightly less negative padding
+
+        ax.set_xlabel(x1_label, fontsize=8, labelpad=-8)
+        ax.set_ylabel(x2_label, fontsize=8, labelpad=-7)
+        ax.set_zlabel(z_label, fontsize=8, labelpad=-8)
+        
+        if ax.figure.axes[0] == ax and show_colorbar: # Only add colorbar if it's not a tightly packed subplot
+            plt.colorbar(scatter, ax=ax, label=z_label, pad=0.1)
+
+    if save_path is not None:
+        print(f'save fig to {save_path} ... success!')
+        plt.savefig(save_path, format='pdf', bbox_inches='tight', dpi=300, pad_inches=0.0, transparent=True)
+    
+    return best_bin if return_best_bin else None
 
 #######################################################################
 ## Statistical Test Utils
