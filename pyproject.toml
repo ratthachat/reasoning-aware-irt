@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "An extended Item Response Theory for Reasoning Models"
 license = { text = "MIT" }
 authors = [
-  { name="Ratthachat Chatpatanasiri", email="undisclosed@gmail.com" },
+  { name="Anonymous", email="undisclosed@gmail.com" },
 ]
 
 requires-python = ">=3.8"
@@ -20,7 +20,7 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/ratthachat/reasoning-aware-irt"
+Homepage = "https://github.com/"
 
 [tool.setuptools]
 packages = ["reasoning_aware_irt"]

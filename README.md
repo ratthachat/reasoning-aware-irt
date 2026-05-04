@@ -1,7 +1,13 @@
 ![My project logo](./logo.png)
 
-# Reasoning-Aware IRT (Anonymous Version)
+# Reasoning-Aware IRT
 
+## Installation
+```
+pip install -e .
+```
+
+## Reproduce Paper Results
 In this anonymous version, we prepare all reproducible results from paper via interactive-readable notebooks:
 all notebooks are in `/paper_notebooks/`
 
@@ -16,3 +22,13 @@ all notebooks are in `/paper_notebooks/`
 | **Table 4** | fig2_posthoc.ipynb | Full GEM Results | D.2 |
 | **Table 6** | fig1a.ipynb | Significance Tests - 1 | D.4 |
 | **Table 7** | fig1b_livebench_part.ipynb | Significance Tests - 2  | D.4 |
+
+### Misc
+For other results which `OPENROUTER_API_KEY` is needed: 
+* **Data Preparation**: Firstly, downloading all data from `https://huggingface.co/datasets/livebench/`. Filter only models having reasoning traces in `https://huggingface.co/datasets/livebench/model_answer`, then follow the evaluation process in our notebook : `Livebench_evaluation.ipynb` to produce $Y_{ij}$, $B_{ij}$ and $c_{i}$
+
+* **Run New Models on LiveBench**: Follow our inference notebook: `Livebench_inference.ipynb`, then evaluate with `Livebench_evaluation.ipynb`
+
+* **Run on New Datasets (e.g. GPQA-Diamond / MMLU-Pro)**: Downloading the dataset, and format the dataset as shown in `data/livebench_reasoning_problems.csv`. Then simply follow `Livebench_inference.ipynb` and `Livebench_evaluation.ipynb`
+
+* **Fig.4 (b)** : Simply selected problems with desired $b_i$ range ($b_i$ is already prepared by `fig2_posthoc.ipynb`, see how to load with `fig3_4.ipynb`). Then follow `Livebench_inference.ipynb` and `Livebench_evaluation.ipynb`.
