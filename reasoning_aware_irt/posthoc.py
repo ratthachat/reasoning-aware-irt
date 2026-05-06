@@ -246,11 +246,26 @@ def print_model_summary(model_list, fit_results, Y_ij, sort_by="m", ascending=Fa
         
         d['avg_budget'] = fit_results.info['B_ij'][:,j].mean()
         x_j = np.log1p(d['avg_budget'])
+
         d['eff_theta'] = d['b_theta'] + x_j* d['gamma'] + x_j**2 * d['kappa']
         d['best_theta'] = d['b_theta'] + d['optimal_log_budget'] * d['gamma'] + d['optimal_log_budget']**2 * d['kappa']
         
-        d['eff_se'] = d['theta_se'] + d['optimal_log_budget']/2 * gse + (d['optimal_log_budget']/2)**2 * kse
-        d['best_se'] = d['theta_se'] + d['optimal_log_budget'] * gse + d['optimal_log_budget']**2 * kse
+        #TODO: clean up duplicated codes
+        x_med = d["optimal_log_budget"]/2
+        var_theta_eff = (
+            d['theta_se']**2
+            + x_med**2 * gse**2
+            + x_med**4 * kse**2
+        )
+        x_opt = d["optimal_log_budget"]
+        var_theta_opt = (
+            d['theta_se']**2
+            + x_opt**2 * gse**2
+            + x_opt**4 * kse**2
+        )
+        
+        d['eff_se'] = np.sqrt(np.maximum(var_theta_eff, 0.0))
+        d['best_se'] = np.sqrt(np.maximum(var_theta_opt, 0.0))
         
         d['avg_y'] = Y_ij[:, j].mean()
         d['m'] = m

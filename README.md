@@ -8,8 +8,8 @@ pip install -e .
 ```
 
 ## Reproduce Paper Results
-In this anonymous version, we prepare all reproducible results from paper via interactive-readable notebooks:
-all notebooks are in `/paper_notebooks/`
+We prepare all reproducible results from paper via interactive-readable notebooks.
+All notebooks are in `/paper_notebooks/`
 
 | Figure / Table | Notebook files | Main Finding | Section |
 | :--- | :--- | :--- | :--- |
