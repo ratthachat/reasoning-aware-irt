@@ -1,4 +1,4 @@
-![My project logo](./logo.png)
+![My project logo](./logo2.png)
 
 # Reasoning-Aware IRT
 
