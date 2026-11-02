@@ -1,11 +1,48 @@
-![My project logo](./logo2.png)
+<br/>
+  <h1 align="center" style="font-size: 1.7rem">Reasoning-Aware IRT : Explainable Evaluation of Test-Time Scaling in Reasoning Models</h1>
+  <p align="center">
+  NeurIPS 2026
+  </p>
+  <p align="center">
+    <a href="https://thaiagi.substack.com/">Ratthachat Chatpatanasiri</a>,
+  </p>
+  <p align="center">
+    <a href="https://neurips.cc/virtual/2026/loc/sydney/poster/139400">
+      <img src='https://img.shields.io/badge/Paper-PDF-red?style=flat&logo=arXiv&logoColor=red' alt='Paper PDF'>
+    </a>
+  </p>
+</p>
 
-# Reasoning-Aware IRT
+# Introduction
+**Item Response Theory (IRT)** is a *interpretable and robust* psychometric framework for modeling latent test-taker ability. It is widely used in high-stakes testing programs, including TOEFL, GRE, and SAT. Unlike raw accuracy, IRT's model called *three-parameter logistic* (3PL) jointly estimates test-taker ability and the the following problem characteristics: *problem difficulty*, *problem discrimiation & ambiguity*, as well as *guessing probability*. Prior works have therefore applied IRT to model evaluation as an interpretable and rank-stabilizing alternative to raw accuracy scores.
+
+# Our Reasoning-Aware IRT
+<div align="center">
+    <img src="./logo2.png" alt="Reasoning-Aware IRT Results" height="450" style="vertical-align:middle">
+</div>
+
+The emergence of **test-time scaling** in reasoning models introduces a critical new dimension: *compute budget*. Although intensive test-time compute indeed enables reasoning models to make substantial progress on solving highly challenging benchmarks, many recent works also show that excessive reasoning can become counterproductive (e.g. the *overthinking* phenomenon). Since a direct application of classical IRT to reasoning models collapses intrinsic ability and test-time compute into a single static score, **classical IRT cannot explain when additional budget helps, how much is needed, or when excessive reasoning becomes inefficient**.
+
+In this work, we extend the classical 3PL into **reasoning-aware 3PL** with the following three key take-aways:
+
+* Reasoning-aware 3PL preserves important classical 3PL properties: it is more stable and has more generalization power than raw-accuracy
+* Reasoning-aware 3PL separates baseline ability from test-time scaling, quantifying both how much additional computation improves each model's effective ability and where that improvement reaches its estimated maximum.
+* Reasoning-aware 3PL could identify and quantify a potential *budget-inefficient regime* of test-time scaling via the downward curvature and can be confirmed by a stratification analysis.
 
 ## Installation
 ```
 pip install -e .
 ```
+
+# How to use our program
+We have prepared tutorial-style notebook that you can easily follow.
+
+## Data Preparation
+The inputs of our reasoning-aware 3PL are simply two matrices of the same size *I x J*, where *I* is the number of items i.e. the total number of problems in your dataset and *J* is the number of models to be evaluated.
+* $\mathbf{Y}$ : the accuracy matrix (also called the response matrix), where each value ${Y}_{ij} \in [0,1]$ denotes the accuracy of a model *j* on a problem *i*.
+* $\mathbf{B}$ : the budget matrix, where each value ${B}_{ij}$ is an integer denoting the reasoning tokens that a model *j* used on a problem *i*.
+
+See **Data Loading** section in `fig2_1st_pass.ipynb` for examples of the input matrices.
 
 ## Reproduce Paper Results
 We prepare all reproducible results from paper via interactive-readable notebooks.
@@ -25,7 +62,7 @@ All notebooks are in `/paper_notebooks/`
 
 ### Misc
 For other results which `OPENROUTER_API_KEY` is needed: 
-* **Data Preparation**: Firstly, downloading all data from `https://huggingface.co/datasets/livebench/`. Filter only models having reasoning traces in `https://huggingface.co/datasets/livebench/model_answer`, then follow the evaluation process in our notebook : `Livebench_evaluation.ipynb` to produce $Y_{ij}$, $B_{ij}$ and $c_{i}$ (We have already done this process so that all notebooks listed above can be reproducible) 
+* **Data Preparation**: Firstly, downloading all data from `https://huggingface.co/datasets/livebench/`. Filter only models having reasoning traces in `https://huggingface.co/datasets/livebench/model_answer`, then follow the evaluation process in our notebook : `Livebench_evaluation.ipynb` to produce $Y_{ij}$, $B_{ij}$ and $c_{i}$ (We have already done this process so that all notebooks listed above can be reproducible)
 
 * **Run New Models on LiveBench**: Follow our inference notebook: `Livebench_inference.ipynb`, then evaluate with `Livebench_evaluation.ipynb`
 
