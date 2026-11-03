@@ -59,7 +59,7 @@ w_post_jk # a posterior weight matrix with indices j & k (see Eq.(4) in the pape
 Please see details in `fig2_1st_pass.ipynb`, but basically after user already prepare data in `Y_ij, B_ij` and `c_i`
 
 ```
-from reasoning_aware_irt.gem_quad import CalibrationData, CalibrationConfig
+from reasoning_aware_irt.gem_quad import CalibrationData, CalibrationConfig, compute_louis_se
 from reasoning_aware_irt.gem_quad import ReasoningAware3PLQuadraticCalibrator as ReasoningAware3PLCalibrator
 
 data = CalibrationData(Y_ij=Y_ij, B_ij=B_ij, c_i=c_i)

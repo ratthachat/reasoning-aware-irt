@@ -5,6 +5,7 @@ import math
 
 from operator import itemgetter
 
+from .gem_quad import compute_louis_se
 from .utils import prob_correct_3pl
 
 def estimate_latent(mask, a_i, b_i, c_i, y_i):
@@ -224,19 +225,24 @@ def extract_slice_data(X, y, slice_axis=0, num_slices=6, target_slice_idx=0,
 
 ######################################################################
 # model's print_summary helper
-def print_model_summary(model_list, fit_results, Y_ij, sort_by="m", ascending=False):
+# this code may need refactor to be more organized
+def print_model_summary(model_list, fit_results, Y_ij, se_dict=None, sort_by="m", ascending=False):
     data = []
     for j, m in enumerate(model_list):
         d={} # temp dict
         d['b_theta'] = fit_results.theta_j_mean[j]
         d['theta_se'] = fit_results.theta_j_se[j]
         d['gamma'] = fit_results.gamma_j[j]
-        d['gamma_se'] = fit_results.gamma_bracket_half_tau[j]
-
         d['kappa'] = np.clip(fit_results.kappa_j[j], a_min=-1.00, a_max=-0.00001)
-        d['kappa_se'] = fit_results.kappa_bracket_half_tau[j] # fit_results.kappa_bracket_half_ideal[j]
 
-        gse, kse = d['gamma_se'], d['kappa_se'] # fit_results.gamma_bracket_half_ideal[j] , fit_results.kappa_bracket_half_tau[j]# 
+        if se_dict is None: # use the approximated approach
+            d['kappa_se'] = fit_results.kappa_bracket_half_tau[j] 
+            d['gamma_se'] = fit_results.gamma_bracket_half_tau[j]
+        else: # use Louis SE
+            d['kappa_se'] = se_dict["kappa_se_louis"][j]
+            d['gamma_se'] = se_dict["gamma_se_louis"][j]
+
+        gse, kse = d['gamma_se'], d['kappa_se'] 
         N_SE = 0.0
         MIN_BUDGET, MAX_BUDGET = 32, 16384
         d['optimal_log_budget'] = -(d['gamma']+N_SE*gse)/(2*(d['kappa']+N_SE*kse))   # conservative with N_SE
