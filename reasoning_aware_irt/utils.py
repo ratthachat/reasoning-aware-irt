@@ -49,6 +49,19 @@ def prob_correct_3pl(theta_j, a_i, b_i, c_i, gamma_j=None, kappa_j=None, x_ij=No
     exp_arg = np.clip(exp_arg, -30, 30)
     return c_i[:, None] + (1 - c_i[:, None]) / (1 + np.exp(exp_arg))
 
+def align_theta_scales(theta_classic: np.ndarray, theta_max: np.ndarray) -> np.ndarray:
+    """
+    Aligns the scale of classical IRT abilities to reasoning-aware max (optimal) abilities
+    using the Mean/Sigma equating method.
+    """
+    # 1. Standardize classical theta to have zero mean and unit variance
+    z_classic = (theta_classic - np.mean(theta_classic)) / np.std(theta_classic)
+    
+    # 2. Scale and shift to match the moments of theta_max
+    theta_classic_aligned = (z_classic * np.std(theta_max)) + np.mean(theta_max)
+    
+    return theta_classic_aligned
+
 def item_variance_3pl(theta, a, b, c):
     """Calculates the variance for a single item at a given theta level.
     

@@ -14,7 +14,7 @@
 </p>
 
 # Introduction
-**Item Response Theory (IRT)** is a *interpretable and robust* psychometric framework for modeling latent test-taker ability. It is widely used in high-stakes testing programs, including TOEFL, GRE, and SAT. Unlike raw accuracy, IRT's model called *three-parameter logistic* (3PL) jointly estimates test-taker ability and the the following problem characteristics: *problem difficulty*, *problem discrimiation & ambiguity*, as well as *guessing probability*. Prior works have therefore applied IRT to model evaluation as an interpretable and rank-stabilizing alternative to raw accuracy scores.
+**Item Response Theory (IRT)** is a *interpretable and robust* psychometric framework for modeling latent test-taker ability. It is widely used in high-stakes testing programs, including TOEFL, GRE, and SAT. Unlike raw accuracy, IRT's model called *three-parameter logistic* (3PL) jointly estimates test-taker ability and the following problem characteristics: *problem difficulty*, *problem discrimination & ambiguity*, as well as *guessing probability*. Prior works have therefore applied IRT to model evaluation as an interpretable and rank-stabilizing alternative to raw accuracy scores.
 
 # Our Reasoning-Aware IRT
 <div align="center">
@@ -80,11 +80,12 @@ All notebooks are in `/paper_notebooks/`
 
 | Figure / Table | Notebook files | Main Finding | Section |
 | :--- | :--- | :--- | :--- |
-| **Fig 1(a)** | fig1a.ipynb | Rank-stability | 4.1  |
-| **Fig 1(b)** (LiveBench Part) | fig1b_livebench_part.ipybnb | ROC-AUC | 4.1 |
+| **Fig 1 (a)** | fig1a.ipynb | Rank-stability | 4.1  |
+| **Fig 1 (b)** (LiveBench Part) | fig1b_livebench_part.ipybnb | ROC-AUC | 4.1 |
 | **Fig 2** | fig2_posthoc.ipynb | Unified Benchmark-Ability Diagram | 4.2  |
-| **Fig 3** | fig3_4.ipynb | Descriptive Insights | 4.2-4.3 |
-| **Fig 4(a)** | fig3_4.ipynb | Descriptive Insights | 4.3 |
+| **Fig 3 (a-b)** | fig3_4.ipynb | Descriptive Insights | 4.2-4.3 |
+| **Fig 3 (d)** | fig2_posthoc.ipynb | Descriptive Insights | 4.2-4.3 |
+| **Fig 4** | fig3_4.ipynb | Descriptive Insights | 4.3 |
 | **Table 2-3** | fig2_1st_pass.ipynb | Hyperparameter Pre-Experiments | D.1 |
 | **Table 4** | fig2_posthoc.ipynb | Full GEM Results | D.2 |
 | **Table 6** | fig1a.ipynb | Significance Tests - 1 | D.4 |
