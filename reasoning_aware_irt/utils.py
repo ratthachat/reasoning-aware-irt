@@ -954,6 +954,266 @@ def plot_bins_2d(X, y, num_bins=10, min_points_per_bin=3, use_quantiles=False,
     return best_bin if return_best_bin else None
 
 #######################################################################
+## New plots for camera-ready version
+def estimate_latent_extended(mask, a_i, b_i, c_i, y_i, pred_theta, classic_theta):
+    """Extension of estimate_latent with pred_theta and classic_theta as inputs"""
+    sub_a = a_i[mask]
+    sub_b = b_i[mask]
+    sub_c = c_i[mask]
+    sub_y = y_i[mask][:, None] # (sub_Q,1)
+
+    if not isinstance(pred_theta,  np.ndarray): # i.e. float
+        pred_theta = np.array([pred_theta]) # (1,)
+    if not isinstance(classic_theta,  np.ndarray):
+        classic_theta = np.array([classic_theta]) # (1,)
+    
+    latent_k = np.linspace(-3, 4, 282)
+    p_ik = prob_correct_3pl(latent_k, sub_a, sub_b, sub_c)
+    ll_k = (sub_y * np.log(p_ik) + (1.0 - sub_y) * np.log(1.0 - p_ik)).sum(axis=0)  # (K,)
+
+    p_pred = prob_correct_3pl(pred_theta, sub_a, sub_b, sub_c)
+    ll_pred = (sub_y * np.log(p_pred) + (1.0 - sub_y) * np.log(1.0 - p_pred)).sum(axis=0)  # (1,)
+
+    p_classic = prob_correct_3pl(classic_theta, sub_a, sub_b, sub_c)
+    ll_classic = (sub_y * np.log(p_classic) + (1.0 - sub_y) * np.log(1.0 - p_classic)).sum(axis=0)  # (1,)
+    
+    return latent_k[np.argmax(ll_k)], np.max(ll_k), ll_pred[0], ll_classic[0]
+
+def plot_empirical_bin_vs_3pl(
+    # Data: x,y are used due to naming conventin on plot_combined_binned_data
+    x, # tokens usage for each problem, if unnormalized, use apply_log_x =True
+    y, # b_i for each problem
+    a_i=None, c_i=None,
+    accuracy_np=None, # Y_ij
+    accuracy_threshold=0.50, # for some non-binary response Y_ij
+    apply_log_x =False,
+
+    # fitted IRT models (reasoning and classic)
+    theta_base=0.0, gamma=0.3, kappa=-0.05,
+    theta_classic=None,
+
+    # bin options
+    num_bins=20, min_elements_in_bin=3,
+    use_quantiles=True, # if not quantiling for bin, it will use equal-space but some bin maybe empty
+
+    # Plot opitons and misc info
+    ax=None, alpha=1.0,
+    model_name="model_x",
+    color='red',  theory_color='black',
+    show_graph=True, show_linear_decline=False,
+    connect_empirical=True,
+    show_peak_info=True,
+    debug=False,
+    figsize=(5,3),
+    ignore_legend=False,
+    save_path="new_fig3_b.pdf",
+    **kwargs
+):
+    """This function is 'model-wise'.
+    It visualizes together empirical bin-wise, reason 3PL, and classic 3PL.
+    """
+
+    if ax is None and show_graph:
+        fig, ax = plt.subplots(figsize=figsize)
+        is_standalone = True
+    else:
+        is_standalone = False
+
+    if accuracy_np is None:
+        raise ValueError("accuracy_np (Y_:j array) must be provided in plot_function_argv.")
+
+    # Apply log(x + 1) if raw tokens are passed
+    if apply_log_x:
+        x = np.log1p(x)
+        if model_name=='command-r-plus-08-2024': # adhoc bug fix -- break the tie of 3 / 4 / 5 tokens on this model
+            eps = 1e-7
+            x = x + np.random.uniform(-eps, eps, size=len(x))
+
+    if use_quantiles:
+        x_bins = np.unique(np.quantile(x, np.linspace(0, 1, num_bins + 1)))
+        if len(x_bins)-1 < num_bins:
+            print(f'adjust #bins from {num_bins} to {len(x_bins) - 1}')
+        num_bins = len(x_bins) - 1 # np.unique might reduce length if heavy ties exist
+    else: # use equal spacing with filtering outliers at the two ends
+        p02_s, p98_s = np.percentile(x, [2, 98])
+        valid_mask = (x >= p02_s) & (x <= p98_s)
+        x, y, a_i, c_i, accuracy_np = x[valid_mask], y[valid_mask], a_i[valid_mask], c_i[valid_mask], accuracy_np[valid_mask]
+        x_bins = np.linspace(np.min(x), np.max(x), num_bins + 1)
+
+    # Discretize accuracy for partial/soft scores
+    # TODO: we will remove this code, since we use soft-score in estimate_latent_extended
+    # correct_mask = (accuracy_np >= accuracy_threshold)
+
+    # Calculate theoretical parabola peak
+    x_star = -gamma / (2 * kappa) if kappa < 0 else np.max(x)
+    theta_max = theta_base + gamma * x_star + kappa * (x_star ** 2)
+
+    # Setup theoretical continuous curve
+    max_plot_x = max(np.max(x), x_star) + 1.0
+    min_plot_x = max(0, np.min(x) - 0.5)
+
+    X_plot = np.linspace(min_plot_x, max_plot_x, 200)
+    theta_plot = theta_base + gamma * X_plot + kappa * (X_plot ** 2)
+
+    # Process empirical binning
+    bin_centers = []
+    empirical_theta = []
+    theoretical_theta_at_centers = []
+    pred_llk_ratios = []
+    classic_llk_ratios = []
+
+    bin_idx = []
+    for i in range(num_bins):
+        # Ensure the last bin includes the max value
+        if i == num_bins - 1:
+            in_bin = (x >= x_bins[i]) & (x <= x_bins[i+1])
+        else:
+            in_bin = (x >= x_bins[i]) & (x < x_bins[i+1])
+
+        # correct_in_bin = in_bin & correct_mask
+        # b_in_bin = y[correct_in_bin]
+
+        bin_center = (x_bins[i] + x_bins[i+1]) / 2.0
+        
+        # if debug:
+        #     print(f'{model_name} - bin_center:{bin_center} , #elements:{len(y[in_bin])}, avg_b_i:{np.mean(y[in_bin]):.2f}, avg_y_i:{np.mean(accuracy_np[in_bin]):.2f}, avg_c_i:{np.mean(c_i[in_bin]):.2f}, avg_a_i:{np.mean(a_i[in_bin]):.2f}')
+        
+        if debug and model_name=='command-r-plus-08-2024' and i<=1: # this individual model have several x-ties problem at (unnormalized) x = 3,4,5
+            print(f'DEBUG: at bin{i} #elements is {len(b_in_bin)} - 3-edges are {x_bins[i]} / {x_bins[i+1]} / {x_bins[i+2]}')
+        if True: #len(b_in_bin) >= min_elements_in_bin: # if use_quantiles=True, this will always True
+            bin_centers.append(bin_center)
+            
+            # Theoretical predicted point for correlation
+            pred_theta = theta_base + gamma * bin_center + kappa * (bin_center ** 2)
+            bin_theta, best_llk, pred_llk, classic_llk = estimate_latent_extended(mask=in_bin, a_i=a_i, b_i=y, c_i=c_i, y_i=accuracy_np, pred_theta=pred_theta, classic_theta=theta_classic)      
+            empirical_theta.append(bin_theta)
+            theoretical_theta_at_centers.append(pred_theta)
+
+            pred_ratio = np.exp(pred_llk)/np.exp(best_llk)
+            classic_ratio = np.exp(classic_llk)/np.exp(best_llk)
+            pred_llk_ratios.append(pred_ratio)
+            classic_llk_ratios.append(classic_ratio)
+
+            bin_idx.append(i) # only when len(b_in_bin) >= min_elements_in_bin
+                
+    # Calculate Correlation and other metrics
+    corr = np.nan
+    mse = 0
+    mse_static = 0
+    if len(empirical_theta) > 1:
+        bin_idx = np.array(bin_idx)
+        theoretical_theta_at_centers = np.array(theoretical_theta_at_centers)
+        empirical_theta = np.array(empirical_theta)
+
+        # --- NEW CODE: Calculate linear slope after x* ---
+        slope_emp = np.nan
+        intercept_emp = np.nan
+        
+        bin_centers_np = np.asarray(bin_centers, dtype=float)
+        empirical_theta_np = np.asarray(empirical_theta, dtype=float)
+        
+        valid = (
+            (bin_centers_np >= x_star) # NOTE x_star is theoretical
+            & np.isfinite(bin_centers_np)
+            & np.isfinite(empirical_theta_np)
+        )
+        
+        x_post = bin_centers_np[valid]
+        y_post = empirical_theta_np[valid]
+        
+        # Require enough points for a meaningful trend
+        if len(x_post) >= 4 and np.ptp(x_post) > 0:
+            X_design = np.column_stack([
+                np.ones_like(x_post),
+                x_post
+            ])
+        
+            intercept_emp, slope_emp = np.linalg.lstsq(
+                X_design, y_post, rcond=None
+            )[0]
+        # -------------------------------------------------        
+        corr = np.corrcoef(theoretical_theta_at_centers, empirical_theta)[0, 1]
+        if len(bin_idx) > 0:
+            mse = np.mean(np.abs(theoretical_theta_at_centers[bin_idx] - empirical_theta[bin_idx]))
+            mse_static = np.mean(np.abs(theta_classic - empirical_theta[bin_idx]))
+
+    # Plot theoretical curve
+    if show_graph:
+        # parameterized reasoning 3PL
+        pred_label = f"{theta_base:.2f} + {gamma:.3f}$X$ - {np.abs(kappa):.3f}$X^2$"
+        if ignore_legend:
+            pred_label=""
+        
+        ax.plot(X_plot, theta_plot, linestyle='--', color=theory_color, alpha=alpha, linewidth=2, 
+                label=pred_label)
+        
+        if bin_centers: # empirical bin-wise plot
+            ax.scatter(bin_centers, empirical_theta, color=color, alpha=alpha, marker='o', s=40)
+            if connect_empirical:
+                ax.plot(bin_centers, empirical_theta, color=color, alpha=max(0.2, alpha-0.2), linestyle=':')
+        
+        # Annotations and peak lines
+        if show_peak_info and kappa < 0:
+            ax.axvline(x_star, color=color, linestyle='-.', alpha=max(0.1, alpha-0.4))
+    
+            ax.axhline(theta_classic, color='blue', linestyle='-.', alpha=max(0.1, alpha-0.4), 
+                       label=f'$\\theta^{{classic}}$')
+        
+            text_str = f'$X^* \\approx {x_star:.2f}$\n$\\theta_{{max}} \\approx {theta_max:.2f}$'
+            if ignore_legend==False:
+                ax.axhline(theta_max, color=color, linestyle='-.', alpha=max(0.1, alpha-0.4))
+                ax.text(x_star + 0.1, theta_max - 0.1, text_str, color=color, fontsize=9,
+                    verticalalignment='top', alpha=0.9)
+            else:
+                ax.axhline(theta_max, color=color, linestyle='-.', alpha=max(0.1, alpha-0.4),
+                          label=f'$\\theta^{{opt}}$')    
+        
+        if is_standalone: # plot more information
+            # title_str = f"Correlation:{corr:.2f} - MSE:{mse:.3f} - Classic MSE:{mse_static:.3f}"
+            
+            # if not np.isnan(slope_emp):
+            #     title_str += f"Slope (m): {slope_emp:.3f} vs $\\kappa$: {kappa:.3f}"
+            # else:
+            #     title_str += f"$\\kappa$: {kappa:.3f}"
+
+            title_str = f"{model_name} (r={corr:.2f})"
+            
+            ax.set_title(title_str)
+            ax.set_xlabel("Log-Budget $X$", labelpad=-1)
+            if True:#ignore_legend==False:
+                # ax.set_ylabel(r"Latent Scale ($\theta^{\mathrm{eff}}$ / $b_i$)",labelpad=-1)
+                ax.set_ylabel(r"Effective Ability $\theta^{\mathrm{eff}}$",labelpad=-1)
+            ax.legend()
+            plt.tight_layout()
+
+        # --- NEW CODE: Linear-trend-after-peak ---
+        if show_linear_decline and np.isfinite(slope_emp):
+            x_decline = np.linspace(x_post.min(), x_post.max(), 50)
+            y_decline = intercept_emp + slope_emp * x_decline
+            ax.plot(
+                x_decline,
+                y_decline,
+                color="green",
+                linewidth=2,
+                label=f"Empirical post-peak slope = {slope_emp:.3f}",
+            )
+        if save_path is not None:
+            print(f'save fig to {save_path} ... success!')
+            plt.savefig(save_path, format='pdf', bbox_inches='tight', dpi=300, pad_inches=0.0, transparent=True)
+
+    return {
+        'x_star': x_star,
+        'theta_max': theta_max,
+        'bin_centers': bin_centers,
+        'empirical_theta': empirical_theta,
+        'corr': corr,
+        'mse': mse,
+        'static_mse': mse_static,
+        'pred_llk_ratio':np.mean(pred_llk_ratios),
+        'classic_llk_ratio':np.mean(classic_llk_ratios),
+    }
+
+#######################################################################
 ## Statistical Test Utils
 def compare_models(p1, p2, y, metric='cross-entropy', test='paired-t', alternative='less', alpha=0.05):
     """

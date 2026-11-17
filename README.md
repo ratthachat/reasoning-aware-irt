@@ -1,5 +1,10 @@
 <br/>
   <h1 align="center" style="font-size: 1.7rem">Reasoning-Aware IRT : Explainable Evaluation of Test-Time Scaling in Reasoning Models</h1>
+
+<div align="center">
+    <img src="./promote.png" alt="ThaiAGI & NeurIPS" height="60" style="vertical-align:middle">
+</div>
+  </br>
   <p align="center">
   NeurIPS 2026
   </p>
@@ -18,7 +23,7 @@
 
 # Our Reasoning-Aware IRT
 <div align="center">
-    <img src="./logo2.png" alt="Reasoning-Aware IRT Results" height="450" style="vertical-align:middle">
+    <img src="./logo2.png" alt="Reasoning-Aware IRT Results" height="400" style="vertical-align:middle">
 </div>
 
 The emergence of **test-time scaling** in reasoning models introduces a critical new dimension: *compute budget*. Although intensive test-time compute indeed enables reasoning models to make substantial progress on solving highly challenging benchmarks, many recent works also show that excessive reasoning can become counterproductive (e.g. the *overthinking* phenomenon). Since a direct application of classical IRT to reasoning models collapses intrinsic ability and test-time compute into a single static score, **classical IRT cannot explain when additional budget helps, how much is needed, or when excessive reasoning becomes inefficient**.
@@ -83,8 +88,8 @@ All notebooks are in `/paper_notebooks/`
 | **Fig 1 (a)** | fig1a.ipynb | Rank-stability | 4.1  |
 | **Fig 1 (b)** (LiveBench Part) | fig1b_livebench_part.ipybnb | ROC-AUC | 4.1 |
 | **Fig 2** | fig2_posthoc.ipynb | Unified Benchmark-Ability Diagram | 4.2  |
-| **Fig 3 (a-b)** | fig3_4.ipynb | Descriptive Insights | 4.2-4.3 |
-| **Fig 3 (d)** | fig2_posthoc.ipynb | Descriptive Insights | 4.2-4.3 |
+| **Fig 3 (a-c), Fig 5-6** | fig3_4.ipynb | Descriptive Insights | 4.2 |
+| **Fig 3 (d)** | fig2_posthoc.ipynb | Descriptive Insights | 4.2 |
 | **Fig 4** | fig3_4.ipynb | Descriptive Insights | 4.3 |
 | **Table 2-3** | fig2_1st_pass.ipynb | Hyperparameter Pre-Experiments | D.1 |
 | **Table 4** | fig2_posthoc.ipynb | Full GEM Results | D.2 |
