@@ -95,6 +95,7 @@ All notebooks are in `/paper_notebooks/`
 | **Table 4** | fig2_posthoc.ipynb | Full GEM Results | D.2 |
 | **Table 6** | fig1a.ipynb | Significance Tests - 1 | D.4 |
 | **Table 7** | fig1b_livebench_part.ipynb | Significance Tests - 2  | D.4 |
+| **Table 8** | linear_reasoning_3pl.ipynb, global_shared_quad_reasoning_3pl.ipynb | Ablation study | D.4 |
 
 ### Misc
 For other results which `OPENROUTER_API_KEY` is needed: 
